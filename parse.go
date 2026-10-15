@@ -2,13 +2,9 @@ package comfy
 
 import (
 	"reflect"
-	"strconv"
+
+	"github.com/Mendes11/comfy/parsers"
 )
-
-// ParseFunc converts a string to the target's value, and sets it inplace
-type ParseFunc func(s string, target reflect.Value) error
-
-var parserRegistry = map[reflect.Kind]ParseFunc{}
 
 // Parser interface parses a given string inplace.
 type ComfyParser interface {
@@ -27,7 +23,7 @@ func parse(fieldName, value string, target reflect.Value) error {
 	if target.Type().Kind() == reflect.Pointer {
 		nonPtrTarget = target.Elem()
 	}
-	if parser, ok := parserRegistry[nonPtrTarget.Kind()]; ok {
+	if parser, ok := parsers.Get(nonPtrTarget); ok {
 		err := parser(value, target)
 		if err != nil {
 			err = TypeMismatchError{
@@ -55,25 +51,4 @@ func parse(fieldName, value string, target reflect.Value) error {
 	}
 
 	return MissingParserError{TargetType: target.Type()}
-}
-
-// Builtin Parsers
-
-var intParser ParseFunc = func(s string, target reflect.Value) error {
-	v, err := strconv.Atoi(s)
-	if err != nil {
-		return err
-	}
-	target.Set(reflect.ValueOf(v))
-	return nil
-}
-
-var stringParser ParseFunc = func(s string, target reflect.Value) error {
-	target.Set(reflect.ValueOf(s))
-	return nil
-}
-
-func init() {
-	parserRegistry[reflect.String] = stringParser
-	parserRegistry[reflect.Int] = intParser
 }

@@ -20,7 +20,7 @@ const (
 
 type tagConfigApply func(*FieldConfig) error
 
-// tagAppliers
+// tagAppliers maps every possible Comfy tag settings to a function that modifies FieldConfig
 var tagAppliers = map[tagConfigName]tagConfigApply{
 	tagConfNoPrefix: noPrefixApply,
 }

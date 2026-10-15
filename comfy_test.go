@@ -107,7 +107,7 @@ func TestBaseStructLoad(t *testing.T) {
 		}
 	})
 
-	t.Run("nested has no-suffix configuration support", func(t *testing.T) {
+	t.Run("nested has no-prefix configuration support", func(t *testing.T) {
 		t.Setenv("VAR2", "test_var_2")
 		type InnerStruct struct {
 			Var2 string

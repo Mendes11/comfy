@@ -37,7 +37,7 @@ func (f Field) Load() (loaded bool, err error) {
 	}
 	name := f.EnvName()
 
-	// Allocate a new value to be replaced only if the field is loaded
+	// Allocate a new value to be replaced
 	var tmpValue reflect.Value
 	if f.isPtr {
 		tmpValue = reflect.New(f.value.Type().Elem()).Elem()
@@ -110,7 +110,7 @@ func (f Field) baseEnvName() string {
 	if f.Config.envName != nil {
 		return *f.Config.envName
 	}
-	return convertToEnvName(f.structField.Name)
+	return ConvertToEnvName(f.structField.Name)
 }
 
 func parseStruct(field Field) (bool, error) {
