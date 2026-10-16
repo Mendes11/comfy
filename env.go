@@ -33,12 +33,12 @@ func ConvertToEnvName(name string) string {
 }
 
 // loadEnvVar will try to load the env var by name or by its _FILE suffix.
-func loadEnvVar(name string, useFileSuffix bool) (val string, loaded bool, err error) {
+func loadEnvVar(name string, fileSuffix string) (val string, loaded bool, err error) {
 	val, loaded = os.LookupEnv(name)
 
-	if !loaded && useFileSuffix {
+	if !loaded && fileSuffix != "" {
 		var filePath string
-		filePath, loaded = os.LookupEnv(name + "_FILE")
+		filePath, loaded = os.LookupEnv(name + fileSuffix)
 		if loaded {
 			valueBytes, err := os.ReadFile(filePath)
 			if err != nil {

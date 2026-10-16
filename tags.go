@@ -6,10 +6,13 @@ import (
 	"strings"
 )
 
+const DEFAULT_FILE_SUFFIX = "_FILE"
+
 // FieldConfig holds all configurations of a single struct field
 type FieldConfig struct {
-	envName  *string
-	noPrefix bool
+	envName    *string
+	fileSuffix string
+	noPrefix   bool
 }
 
 type tagConfigName string
@@ -31,7 +34,9 @@ var noPrefixApply = func(c *FieldConfig) error {
 }
 
 func fieldTagConfigs(structField reflect.StructField) (FieldConfig, error) {
-	conf := FieldConfig{}
+	conf := FieldConfig{
+		fileSuffix: DEFAULT_FILE_SUFFIX,
+	}
 	tagValuesStr, exists := structField.Tag.Lookup("comfy")
 	if !exists {
 		return conf, nil

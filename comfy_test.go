@@ -1,6 +1,7 @@
 package comfy_test
 
 import (
+	"os"
 	"testing"
 
 	"github.com/Mendes11/comfy"
@@ -187,6 +188,38 @@ func TestBaseStructLoad(t *testing.T) {
 		}
 		if conf.Inner.Var2 != "default_inner_2" {
 			t.Fatalf("expected conf.Inner.Var2 to be 'default_inner_2', got '%s'", conf.Inner.Var2)
+		}
+	})
+}
+
+func TestAutomaticFileLoading(t *testing.T) {
+	t.Run("variables load from a file path by default", func(t *testing.T) {
+		type Config struct {
+			Var1 string
+			Var2 string
+		}
+
+		testDir := t.TempDir()
+		f, err := os.CreateTemp(testDir, "var1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		f.Write([]byte("valueFromFile"))
+		f.Close()
+
+		t.Setenv("VAR1", "fromEnv")
+		t.Setenv("VAR2_FILE", f.Name())
+		conf := &Config{}
+		err = comfy.Load(conf)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Log(f.Name())
+		if conf.Var1 != "fromEnv" {
+			t.Fatalf("expected Var1 to be 'fromEnv' got '%s'", conf.Var1)
+		}
+		if conf.Var2 != "valueFromFile" {
+			t.Fatalf("expected Var2 to be 'valueFromFile', got '%s'", conf.Var2)
 		}
 	})
 }

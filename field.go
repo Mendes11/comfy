@@ -56,7 +56,7 @@ func (f Field) Load() (loaded bool, err error) {
 			return false, err
 		}
 
-	} else if envValue, exists, err := loadEnvVar(name, true); exists || err != nil {
+	} else if envValue, exists, err := loadEnvVar(name, f.Config.fileSuffix); exists || err != nil {
 		if err != nil {
 			return false, err
 		}
