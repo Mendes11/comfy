@@ -7,6 +7,27 @@ import (
 	"github.com/Mendes11/comfy"
 )
 
+func setupFileVariable(t *testing.T, value string) *os.File {
+	testDir := t.TempDir()
+	f, err := os.CreateTemp(testDir, "envfile")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = f.Write([]byte(value))
+	_ = f.Close()
+	return f
+}
+
+func setupChangeFileVariable(path string, value string) error {
+	f, err := os.OpenFile(path, os.O_TRUNC|os.O_WRONLY, 0o666)
+	if err != nil {
+		return err
+	}
+	_, _ = f.Write([]byte(value))
+	_ = f.Close()
+	return nil
+}
+
 func TestBaseStructLoad(t *testing.T) {
 	t.Run("Load loads with all variables set", func(t *testing.T) {
 		t.Setenv("VAR1", "test_var_1")
@@ -97,7 +118,9 @@ func TestBaseStructLoad(t *testing.T) {
 		if conf.OptVar != nil {
 			t.Fatalf("expected OptVar to be nil, got '%s'", *conf.OptVar)
 		}
-		if conf.OptVarFilled == nil || *conf.OptVarFilled != "test_filled" {
+		if conf.OptVarFilled == nil {
+			t.Fatalf("expected OptVarFilled to be 'test_filled', got nil")
+		} else if *conf.OptVarFilled != "test_filled" {
 			t.Fatalf("expected OptVarFilled to be 'test_filled', got '%s'", *conf.OptVarFilled)
 		}
 		if conf.OptStruct != nil {
@@ -214,12 +237,32 @@ func TestAutomaticFileLoading(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		t.Log(f.Name())
 		if conf.Var1 != "fromEnv" {
 			t.Fatalf("expected Var1 to be 'fromEnv' got '%s'", conf.Var1)
 		}
 		if conf.Var2 != "valueFromFile" {
 			t.Fatalf("expected Var2 to be 'valueFromFile', got '%s'", conf.Var2)
+		}
+	})
+	t.Run("FileField type is correctly setup", func(t *testing.T) {
+		type Config struct {
+			Var1 comfy.FileField[int]
+		}
+		f := setupFileVariable(t, "444")
+		t.Setenv("VAR1_FILE", f.Name())
+
+		conf := &Config{}
+		err := comfy.Load(conf)
+		if err != nil {
+			t.Fatal(err)
+		}
+		v, err := conf.Var1.Value()
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if v != 444 {
+			t.Fatalf("expected Var1 to be 444, got %d", v)
 		}
 	})
 }

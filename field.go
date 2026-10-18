@@ -1,8 +1,13 @@
 package comfy
 
 import (
+	"fmt"
+	"os"
 	"reflect"
+	"regexp"
 )
+
+var fileFieldMatcher = regexp.MustCompile(`^FileField\[.*?\]$`)
 
 // Field represents a single configurable field loaded by Comfy
 type Field struct {
@@ -10,8 +15,8 @@ type Field struct {
 	value       reflect.Value
 	isPtr       bool
 
-	Parent *Field
-	Config FieldConfig
+	parent *Field
+	config FieldConfig
 }
 
 // NewField returns an instance of a Comfy Field
@@ -24,8 +29,8 @@ func NewField(structField reflect.StructField, value reflect.Value, parent *Fiel
 		structField: structField,
 		value:       value,
 		isPtr:       value.Kind() == reflect.Pointer,
-		Parent:      parent,
-		Config:      conf,
+		parent:      parent,
+		config:      conf,
 	}, nil
 }
 
@@ -47,16 +52,24 @@ func (f Field) Load() (loaded bool, err error) {
 
 	// Route the field to its appropriate loading function
 	if tmpValue.Kind() == reflect.Struct {
-		tmpField, err := NewField(f.structField, tmpValue, f.Parent)
-		if err != nil {
-			return false, err
+		if fileFieldMatcher.MatchString(f.structField.Type.Name()) {
+			filePath := os.Getenv(f.FileEnvName())
+			if filePath == "" {
+				return false, fmt.Errorf("comfy expects %s variable to be set", f.FileEnvName())
+			}
+			tmpValue.Addr().MethodByName("Setup").Call([]reflect.Value{reflect.ValueOf(f), reflect.ValueOf(filePath)})
+			loaded = true
+		} else {
+			tmpField, err := NewField(f.structField, tmpValue, f.parent)
+			if err != nil {
+				return false, err
+			}
+			loaded, err = parseStruct(tmpField)
+			if err != nil {
+				return false, err
+			}
 		}
-		loaded, err = parseStruct(tmpField)
-		if err != nil {
-			return false, err
-		}
-
-	} else if envValue, exists, err := loadEnvVar(name, f.Config.fileSuffix); exists || err != nil {
+	} else if envValue, exists, err := loadEnvVar(name, name+f.config.fileSuffix); exists || err != nil {
 		if err != nil {
 			return false, err
 		}
@@ -79,10 +92,10 @@ func (f Field) Load() (loaded bool, err error) {
 // AsEnvPrefix returns a string to be used by this field's children as their prefix.
 func (f Field) AsEnvPrefix() string {
 	p := ""
-	if f.Parent != nil {
-		p = f.Parent.AsEnvPrefix()
+	if f.parent != nil {
+		p = f.parent.AsEnvPrefix()
 	}
-	if !f.Config.noPrefix {
+	if !f.config.noPrefix {
 		envName := f.baseEnvName()
 		if p != "" {
 			p += "_"
@@ -94,8 +107,8 @@ func (f Field) AsEnvPrefix() string {
 
 func (f Field) EnvName() string {
 	prefix := ""
-	if f.Parent != nil {
-		prefix = f.Parent.AsEnvPrefix()
+	if f.parent != nil {
+		prefix = f.parent.AsEnvPrefix()
 	}
 	envName := f.baseEnvName()
 
@@ -106,9 +119,13 @@ func (f Field) EnvName() string {
 	return envName
 }
 
+func (f Field) FileEnvName() string {
+	return f.EnvName() + f.config.fileSuffix
+}
+
 func (f Field) baseEnvName() string {
-	if f.Config.envName != nil {
-		return *f.Config.envName
+	if f.config.envName != nil {
+		return *f.config.envName
 	}
 	return ConvertToEnvName(f.structField.Name)
 }

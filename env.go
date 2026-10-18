@@ -1,6 +1,7 @@
 package comfy
 
 import (
+	"fmt"
 	"os"
 	"strings"
 	"unicode"
@@ -33,20 +34,25 @@ func ConvertToEnvName(name string) string {
 }
 
 // loadEnvVar will try to load the env var by name or by its _FILE suffix.
-func loadEnvVar(name string, fileSuffix string) (val string, loaded bool, err error) {
-	val, loaded = os.LookupEnv(name)
+func loadEnvVar(envName string, fileEnvName string) (val string, loaded bool, err error) {
+	val, envExists := os.LookupEnv(envName)
+	filePath, fileEnvExists := os.LookupEnv(fileEnvName)
+	loaded = envExists || fileEnvExists
 
-	if !loaded && fileSuffix != "" {
-		var filePath string
-		filePath, loaded = os.LookupEnv(name + fileSuffix)
-		if loaded {
-			valueBytes, err := os.ReadFile(filePath)
-			if err != nil {
-				return "", false, err
-			}
-			val = string(valueBytes)
+	if !envExists && fileEnvExists {
+		val, err = loadFromPath(filePath)
+		if err != nil {
+			return val, fileEnvExists, fmt.Errorf("loadFromPath failed: %w", err)
 		}
 	}
 
 	return val, loaded, nil
+}
+
+func loadFromPath(path string) (string, error) {
+	valueBytes, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	return string(valueBytes), nil
 }
