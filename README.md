@@ -1,7 +1,7 @@
 <p align="center">
     <picture>
       <source media="(prefers-color-scheme: light)" srcset="docs/content/assets/img/comfy.logo.png">
-      <img alt="Comfy" title="Comfy" height="250" width="250" src="docs/content/assets/img/comfy.logo.png">
+      <img alt="Comfy" title="Comfy" height="400" width="400" src="docs/content/assets/img/comfy.logo.png">
     </picture>
 </p>
 
