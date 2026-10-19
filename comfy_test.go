@@ -18,17 +18,17 @@ func setupFileVariable(t *testing.T, value string) *os.File {
 	return f
 }
 
-func setupChangeFileVariable(path string, value string) error {
-	f, err := os.OpenFile(path, os.O_TRUNC|os.O_WRONLY, 0o666)
-	if err != nil {
-		return err
-	}
-	_, _ = f.Write([]byte(value))
-	_ = f.Close()
-	return nil
-}
-
 func TestBaseStructLoad(t *testing.T) {
+	t.Run("fails when not a pointer", func(t *testing.T) {
+		type Config struct {
+			Var1 string
+		}
+		if err := comfy.Load(Config{}); err == nil {
+			t.Fatalf("Expected to fail")
+		} else if err != comfy.ErrExpectedPtr {
+			t.Fatalf("Expected comfy.NotPointerErr, got %s", err)
+		}
+	})
 	t.Run("Load loads with all variables set", func(t *testing.T) {
 		t.Setenv("VAR1", "test_var_1")
 		t.Setenv("VAR2", "test_var_2")
@@ -263,6 +263,41 @@ func TestAutomaticFileLoading(t *testing.T) {
 
 		if v != 444 {
 			t.Fatalf("expected Var1 to be 444, got %d", v)
+		}
+	})
+}
+
+func TestLoadConfig(t *testing.T) {
+	t.Run("LoadConfig without default", func(t *testing.T) {
+		type Config struct {
+			Var1 string
+		}
+		t.Setenv("VAR1", "value1")
+		conf, err := comfy.LoadConfig[Config]()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if conf.Var1 != "value1" {
+			t.Fatalf("expected VAR1 to be 'value1', got '%s'", conf.Var1)
+		}
+	})
+	t.Run("LoadConfig with environment default", func(t *testing.T) {
+		type Config struct {
+			Var1 string
+			Var2 string
+		}
+		t.Setenv("VAR2", "valueInEnv")
+		comfy.SetEnvironmentDefault("development", Config{Var1: "defaultValue1"})
+		comfy.SetAppEnvironment("development")
+		conf, err := comfy.LoadConfig[Config]()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if conf.Var1 != "defaultValue1" {
+			t.Fatalf("expected Var1 to be 'defaultValue1', got '%s'", conf.Var1)
+		}
+		if conf.Var2 != "valueInEnv" {
+			t.Fatalf("expected Var2 to be 'valueInEnv', got '%s'", conf.Var2)
 		}
 	})
 }
