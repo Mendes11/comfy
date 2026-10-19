@@ -81,16 +81,47 @@ Comfy will resolve `DB.Host` as `HOST` only.
 
 ## Advanced Uses
 
+### Dotenv files
+
 Comfy not only loads from environment variables, but it also loads from `dotenv` files. By default it'll look for dotenv files in the current directory and load them as environment variables before processing the configurations.
 
 The loading order is:
 
-```
 | Order       | Filename                 | Notes                             | Versionable |
-| ----------- | ------------------------ | --------------------------------- | ----------- |
+| :--- | :--- | :--- | :--- |
 | 1           | .env                     | common values for any dev to use. | Yes         |
 | 2           | .env.local               | local overrides of .env           | No          |
 | 3           | .env.<environment>       | Environment-specific variables.   | Yes         |
-| 4           | .env.<environment>.local | Environment-specific override     | No          |
+| 4           | .env.<environment>.local | Environment-specific local override     | No          |
 
+### Working with Application Environment
+
+By default, if `APP_ENV` is set to a value, comfy will set that value as the application environment.
+eg: `APP_ENV=development`. When that's set, it'll load the environment-specific dotenv files, and it'll also allow you to load environment-specific **defaults**.
+
+You can customize the env-var name by calling `comfy.SetAppEnvName`, or set it programatically through `comfy.SetAppEnvironment`.
+
+#### Environment Defaults
+
+Inspired by how Ruby on Rails deals with different environments, comfy allows you to declare default values per environment:
+
+```go
+type Config struct {
+  StorageBackend string
+  DBName string
+}
+
+var DevelopmentConfig = Config{
+  StorageBackend: "local",
+  DBName: "comfy_development"
+}
+
+var ProductionConfig = Config{
+  StorageBackend: "s3",
+  DBName: "comfy"
+}
+comfy.SetEnvironmentDefault("development", DevelopmentConfig)
+comfy.SetEnvironmentDefault("production", ProductionConfig)
 ```
+
+If the environment is set, comfy will search on the registered environment defaults if it has some, and start from there.
