@@ -1,5 +1,3 @@
-# Comfy
-
 <p align="center">
     <picture>
       <source media="(prefers-color-scheme: light)" srcset="docs/content/assets/img/comfy.logo.png">
