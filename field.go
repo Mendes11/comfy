@@ -105,7 +105,12 @@ func (f Field) AsEnvPrefix() string {
 	return p
 }
 
+// EnvName returns the environment name this field will look for.
+// When a custom name is set, it will use that name without any prefix
 func (f Field) EnvName() string {
+	if f.config.HasCustomEnvName() {
+		return *f.config.envName
+	}
 	prefix := ""
 	if f.parent != nil {
 		prefix = f.parent.AsEnvPrefix()

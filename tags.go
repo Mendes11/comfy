@@ -15,6 +15,10 @@ type FieldConfig struct {
 	noPrefix   bool
 }
 
+func (f FieldConfig) HasCustomEnvName() bool {
+	return f.envName != nil && *f.envName != ""
+}
+
 type tagConfigName string
 
 const (

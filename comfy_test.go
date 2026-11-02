@@ -181,10 +181,12 @@ func TestBaseStructLoad(t *testing.T) {
 
 	t.Run("env name override supported", func(t *testing.T) {
 		t.Setenv("NEW_NAME", "test_var_1")
-		t.Setenv("NEW_NAME_INNER_ANOTHER_NAME", "test_var_inner")
+		t.Setenv("ANOTHER_NAME", "test_var_inner")
+		t.Setenv("NEW_NAME_INNER_VAR2", "test_var2_inner")
 
 		type InnerStruct struct {
 			Var1 string `comfy:"ANOTHER_NAME"`
+			Var2 string
 		}
 		type Config struct {
 			Var1  string      `comfy:"NEW_NAME"`
@@ -201,6 +203,9 @@ func TestBaseStructLoad(t *testing.T) {
 		}
 		if conf.Inner.Var1 != "test_var_inner" {
 			t.Fatalf("expected conf.Inner.Var1 to be 'test_var_inner', got '%s'", conf.Inner.Var1)
+		}
+		if conf.Inner.Var2 != "test_var2_inner" {
+			t.Fatalf("expected conf.Inner.Var2 to be 'test_var2_inner', got '%s'", conf.Inner.Var2)
 		}
 	})
 
