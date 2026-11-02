@@ -23,22 +23,23 @@ func parse(fieldName, value string, target reflect.Value) error {
 	if target.Type().Kind() == reflect.Pointer {
 		nonPtrTarget = target.Elem()
 	}
-	if parser, ok := parsers.Get(nonPtrTarget); ok {
-		err := parser(value, target)
-		if err != nil {
+
+	if nonPtrTarget.Addr().Type().Implements(parserType) {
+		ret := nonPtrTarget.Addr().MethodByName("ComfyParse").Call([]reflect.Value{reflect.ValueOf(value)})
+		if !ret[0].IsNil() {
+			err := ret[0].Interface().(error)
 			err = TypeMismatchError{
 				FieldName:  fieldName,
 				FieldValue: value,
 				TargetType: target.Type(),
 				Err:        err,
 			}
+			return err
 		}
-		return err
-	}
+		return nil
 
-	if target.Type().Implements(parserType) {
-		ret := target.MethodByName("ComfyParser").Call([]reflect.Value{reflect.ValueOf(value)})
-		err := ret[0].Interface().(error)
+	} else if parser, ok := parsers.Get(nonPtrTarget); ok {
+		err := parser(value, target)
 		if err != nil {
 			err = TypeMismatchError{
 				FieldName:  fieldName,

@@ -51,7 +51,7 @@ func (f Field) Load() (loaded bool, err error) {
 	}
 
 	// Route the field to its appropriate loading function
-	if tmpValue.Kind() == reflect.Struct {
+	if tmpValue.Kind() == reflect.Struct && !tmpValue.Addr().Type().Implements(parserType) {
 		if fileFieldMatcher.MatchString(f.structField.Type.Name()) {
 			filePath := os.Getenv(f.FileEnvName())
 			if filePath == "" {
@@ -132,6 +132,8 @@ func (f Field) baseEnvName() string {
 
 func parseStruct(field Field) (bool, error) {
 	loaded := false
+	if field.structField.Type.Implements(parserType) {
+	}
 
 	for structField, fieldValue := range field.value.Fields() {
 		child, err := NewField(structField, fieldValue, &field)

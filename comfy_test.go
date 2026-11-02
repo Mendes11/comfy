@@ -1,11 +1,41 @@
 package comfy_test
 
 import (
+	"fmt"
 	"os"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/Mendes11/comfy"
 )
+
+type MyType struct {
+	strVal string
+	intVal int
+}
+
+func (m *MyType) ComfyParse(v string) error {
+	values := strings.Split(v, "@")
+	if len(values) != 2 {
+		return fmt.Errorf("expected a string split with an @")
+	}
+	m.strVal = values[0]
+	iVal, err := strconv.Atoi(values[1])
+	if err != nil {
+		return fmt.Errorf("MyType#ComfyParse failed to convert %s to int", values[1])
+	}
+	m.intVal = iVal
+	return nil
+}
+
+// MyStringWithParser will truncate text to up to 10 characters
+type MyStringWithParser string
+
+func (m *MyStringWithParser) ComfyParse(s string) error {
+	*m = MyStringWithParser(s[:10])
+	return nil
+}
 
 func setupFileVariable(t *testing.T, value string) *os.File {
 	testDir := t.TempDir()
@@ -298,6 +328,60 @@ func TestLoadConfig(t *testing.T) {
 		}
 		if conf.Var2 != "valueInEnv" {
 			t.Fatalf("expected Var2 to be 'valueInEnv', got '%s'", conf.Var2)
+		}
+	})
+}
+
+func TestLoadWithCustomParser(t *testing.T) {
+	t.Run("Load with custom parser correctly parsed", func(t *testing.T) {
+		type Config struct {
+			Var1 MyType
+		}
+		t.Setenv("VAR1", "Test@2")
+		conf := &Config{}
+		err := comfy.Load(conf)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if conf.Var1.strVal != "Test" {
+			t.Fatalf("expected strval to be 'Test', got '%s'", conf.Var1.strVal)
+		}
+		if conf.Var1.intVal != 2 {
+			t.Fatalf("expected intVal to be 2, got %d", conf.Var1.intVal)
+		}
+	})
+
+	t.Run("Load user-defined primitive type correctly parses", func(t *testing.T) {
+		type MyString string
+		type Config struct {
+			Var1 MyString
+		}
+		t.Setenv("VAR1", "Testing")
+		conf := &Config{}
+		err := comfy.Load(conf)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if conf.Var1 != "Testing" {
+			t.Fatalf("expected Var1 to be 'Testing', got '%s'", conf.Var1)
+		}
+	})
+
+	t.Run("Load user-defined primitive with custom parser", func(t *testing.T) {
+		type Config struct {
+			Var1 MyStringWithParser
+		}
+		t.Setenv("VAR1", "Some very long text to be truncated")
+		conf := &Config{}
+		err := comfy.Load(conf)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(conf.Var1) != 10 {
+			t.Fatalf("expected Var1 to be truncated with 10 characters, got %d", len(conf.Var1))
+		}
+		if conf.Var1 != "Some very " {
+			t.Fatalf("expected Var1 to be 'Some very l', got '%s'", conf.Var1)
 		}
 	})
 }

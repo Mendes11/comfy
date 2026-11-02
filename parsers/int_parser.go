@@ -35,7 +35,7 @@ func intParserFactory[K Ints](bitSize int) func(string, reflect.Value) error {
 			return err
 		}
 		vType := K(v)
-		target.Set(reflect.ValueOf(vType))
+		setValue(target, reflect.ValueOf(vType))
 		return nil
 	}
 }
@@ -47,7 +47,7 @@ func uintParserFactory[K UInts](bitSize int) func(string, reflect.Value) error {
 			return err
 		}
 		vType := K(v)
-		target.Set(reflect.ValueOf(vType))
+		setValue(target, reflect.ValueOf(vType))
 		return nil
 	}
 }
