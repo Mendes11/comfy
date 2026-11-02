@@ -49,16 +49,6 @@ func setupFileVariable(t *testing.T, value string) *os.File {
 }
 
 func TestBaseStructLoad(t *testing.T) {
-	t.Run("fails when not a pointer", func(t *testing.T) {
-		type Config struct {
-			Var1 string
-		}
-		if err := comfy.Load(Config{}); err == nil {
-			t.Fatalf("Expected to fail")
-		} else if err != comfy.ErrExpectedPtr {
-			t.Fatalf("Expected comfy.NotPointerErr, got %s", err)
-		}
-	})
 	t.Run("Load loads with all variables set", func(t *testing.T) {
 		t.Setenv("VAR1", "test_var_1")
 		t.Setenv("VAR2", "test_var_2")
@@ -211,6 +201,7 @@ func TestBaseStructLoad(t *testing.T) {
 
 	t.Run("default values kept if not set", func(t *testing.T) {
 		t.Setenv("VAR1", "test_var_1")
+		t.Setenv("INNER_VAR2", "test_inner_var_2")
 		type Inner struct {
 			Var1 string
 			Var2 string
@@ -244,8 +235,8 @@ func TestBaseStructLoad(t *testing.T) {
 		if conf.Inner.Var1 != "default_inner_1" {
 			t.Fatalf("expected conf.Inner.Var1 to be 'default_inner_1', got '%s'", conf.Inner.Var1)
 		}
-		if conf.Inner.Var2 != "default_inner_2" {
-			t.Fatalf("expected conf.Inner.Var2 to be 'default_inner_2', got '%s'", conf.Inner.Var2)
+		if conf.Inner.Var2 != "test_inner_var_2" {
+			t.Fatalf("expected conf.Inner.Var2 to be 'test_inner_var_2', got '%s'", conf.Inner.Var2)
 		}
 	})
 }

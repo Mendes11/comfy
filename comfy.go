@@ -7,47 +7,55 @@ import (
 	"github.com/Mendes11/comfy/dotenv"
 )
 
-// Load the values into the given configuration variable.
-// conf must be a pointer
-func Load(conf any) error {
+type Comfy[T any] struct {
+	Config *T `comfy:",no-prefix"`
+}
+
+// New instance of a Comfy loader
+func New[T any](conf *T) *Comfy[T] {
+	return &Comfy[T]{Config: conf}
+}
+
+// Load the configuration values
+func (c *Comfy[T]) Load() error {
 	if err := setup(); err != nil {
 		return fmt.Errorf("comfy.Load setup failed: %w", err)
 	}
-
-	confValue := reflect.ValueOf(conf)
+	confField, _ := reflect.TypeOf(c).Elem().FieldByName("Config")
+	confValue := reflect.ValueOf(c.Config)
 	if confValue.Kind() != reflect.Pointer {
 		return ErrExpectedPtr
 	}
 	if confValue.Elem().Kind() != reflect.Struct {
 		return ErrExpectedStructType
 	}
-	for structField, value := range confValue.Elem().Fields() {
-		f, err := NewField(structField, value, nil)
-		if err != nil {
-			return err
-		}
-		_, err = f.Load()
-		if err != nil {
-			return err
-		}
+	f, err := NewField(confField, confValue.Elem(), nil)
+	if err != nil {
+		return fmt.Errorf("comfy.Comfy#Load failed: %w", err)
+	}
+	_, err = f.Load()
+	if err != nil {
+		return fmt.Errorf("comfy.Comfy#Load failed to load field: %w", err)
 	}
 	return nil
+}
+
+// Load the values into the given configuration variable.
+// conf must be a pointer
+func Load[T any](conf *T) error {
+	return New(conf).Load()
 }
 
 // LoadConfig will return a new configuration object based on the type parameter T.
 // If an environment default is set, it'll initialize the values based on it.
 func LoadConfig[T any]() (T, error) {
 	conf := *new(T)
-	if err := setup(); err != nil {
-		return conf, fmt.Errorf("comfy.LoadConfig setup failed: %w", err)
-	}
 	if envDefault, exists := environments[AppEnvironment()]; exists {
 		conf = envDefault.(T)
 	}
-	if err := Load(&conf); err != nil {
-		return conf, fmt.Errorf("comfy.LoadConfig failed: %w", err)
-	}
-	return conf, nil
+	c := New(&conf)
+	err := c.Load()
+	return *c.Config, err
 }
 
 func setup() error {

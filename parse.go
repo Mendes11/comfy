@@ -53,3 +53,20 @@ func parse(fieldName, value string, target reflect.Value) error {
 
 	return MissingParserError{TargetType: target.Type()}
 }
+
+func loadStructFields(field Field) (bool, error) {
+	loaded := false
+
+	for structField, fieldValue := range field.value.Fields() {
+		child, err := NewField(structField, fieldValue, &field)
+		if err != nil {
+			return false, err
+		}
+		childLoaded, err := child.Load()
+		if err != nil {
+			return false, err
+		}
+		loaded = loaded || childLoaded
+	}
+	return loaded, nil
+}

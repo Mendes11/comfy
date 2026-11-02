@@ -42,29 +42,35 @@ func (f Field) Load() (loaded bool, err error) {
 	}
 	name := f.EnvName()
 
-	// Allocate a new value to be replaced
-	var tmpValue reflect.Value
-	if f.isPtr {
-		tmpValue = reflect.New(f.value.Type().Elem()).Elem()
-	} else {
-		tmpValue = reflect.New(f.value.Type()).Elem()
+	// Create a copy value to serve as the parsing target
+	// This temporary value is used to make sure optional fields can keep their nil value when nothing loaded,
+	// because we have to have an allocated value when parsing the field and assigning a value to it.
+	// But, if there are no fields loaded in that branch, we don't assign this copy to the original
+	copyValue := f.value
+	if f.isPtr && f.value.IsNil() {
+		copyValue = reflect.New(f.value.Type().Elem()).Elem()
+	} else if f.isPtr {
+		copyValue = copyValue.Elem()
 	}
 
 	// Route the field to its appropriate loading function
-	if tmpValue.Kind() == reflect.Struct && !tmpValue.Addr().Type().Implements(parserType) {
+	if copyValue.Kind() == reflect.Struct && !copyValue.Addr().Type().Implements(parserType) {
+		// Struct Type
+		// Check if is of FileField type
 		if fileFieldMatcher.MatchString(f.structField.Type.Name()) {
 			filePath := os.Getenv(f.FileEnvName())
 			if filePath == "" {
 				return false, fmt.Errorf("comfy expects %s variable to be set", f.FileEnvName())
 			}
-			tmpValue.Addr().MethodByName("Setup").Call([]reflect.Value{reflect.ValueOf(f), reflect.ValueOf(filePath)})
+			copyValue.Addr().MethodByName("Setup").Call([]reflect.Value{reflect.ValueOf(f), reflect.ValueOf(filePath)})
 			loaded = true
 		} else {
-			tmpField, err := NewField(f.structField, tmpValue, f.parent)
+			// Load the struct fields
+			tmpField, err := NewField(f.structField, copyValue, f.parent)
 			if err != nil {
 				return false, err
 			}
-			loaded, err = parseStruct(tmpField)
+			loaded, err = loadStructFields(tmpField)
 			if err != nil {
 				return false, err
 			}
@@ -73,7 +79,7 @@ func (f Field) Load() (loaded bool, err error) {
 		if err != nil {
 			return false, err
 		}
-		if err := parse(f.structField.Name, envValue, tmpValue); err != nil {
+		if err := parse(f.structField.Name, envValue, copyValue); err != nil {
 			return false, err
 		}
 		loaded = true
@@ -81,9 +87,9 @@ func (f Field) Load() (loaded bool, err error) {
 
 	if loaded {
 		if f.isPtr {
-			f.value.Set(tmpValue.Addr())
+			f.value.Set(copyValue.Addr())
 		} else {
-			f.value.Set(tmpValue)
+			f.value.Set(copyValue)
 		}
 	}
 	return loaded, nil
@@ -133,23 +139,4 @@ func (f Field) baseEnvName() string {
 		return *f.config.envName
 	}
 	return ConvertToEnvName(f.structField.Name)
-}
-
-func parseStruct(field Field) (bool, error) {
-	loaded := false
-	if field.structField.Type.Implements(parserType) {
-	}
-
-	for structField, fieldValue := range field.value.Fields() {
-		child, err := NewField(structField, fieldValue, &field)
-		if err != nil {
-			return false, err
-		}
-		childLoaded, err := child.Load()
-		if err != nil {
-			return false, err
-		}
-		loaded = loaded || childLoaded
-	}
-	return loaded, nil
 }
