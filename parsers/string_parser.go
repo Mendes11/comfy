@@ -2,9 +2,11 @@ package parsers
 
 import "reflect"
 
-func init() { parserRegistry[reflect.String] = StringParser }
+func init() {
+	parserRegistry[reflect.String] = parseString
+}
 
-var StringParser = func(s string, target reflect.Value) error {
+func parseString(s string, target reflect.Value) error {
 	setValue(target, reflect.ValueOf(s))
 	return nil
 }

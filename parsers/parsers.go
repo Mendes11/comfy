@@ -7,7 +7,7 @@ type ParseFunc func(s string, target reflect.Value) error
 
 var parserRegistry = map[reflect.Kind]ParseFunc{}
 
-func Get(value reflect.Value) (ParseFunc, bool) {
+func Get(value reflect.Type) (ParseFunc, bool) {
 	parser, exists := parserRegistry[value.Kind()]
 	return parser, exists
 }
