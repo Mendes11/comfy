@@ -21,7 +21,6 @@ func (c *Comfy[T]) Load() error {
 	if err := setup(); err != nil {
 		return fmt.Errorf("comfy.Load setup failed: %w", err)
 	}
-	confField, _ := reflect.TypeOf(c).Elem().FieldByName("Config")
 	confValue := reflect.ValueOf(c.Config)
 	if confValue.Kind() != reflect.Pointer {
 		return ErrExpectedPtr
@@ -29,7 +28,8 @@ func (c *Comfy[T]) Load() error {
 	if confValue.Elem().Kind() != reflect.Struct {
 		return ErrExpectedStructType
 	}
-	f, err := NewField(confField, confValue.Elem(), nil)
+
+	f, err := NewField("Config", confValue.Elem(), FieldConfig{noPrefix: true}, nil)
 	if err != nil {
 		return fmt.Errorf("comfy.Comfy#Load failed: %w", err)
 	}

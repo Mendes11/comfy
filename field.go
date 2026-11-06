@@ -11,35 +11,53 @@ var fileFieldMatcher = regexp.MustCompile(`^FileField\[.*?\]$`)
 
 // Field represents a single configurable field loaded by Comfy
 type Field struct {
-	structField reflect.StructField
-	value       reflect.Value
-	isPtr       bool
+	name  string
+	value reflect.Value
+	isPtr bool
 
 	parent *Field
 	config FieldConfig
 }
 
+func (f Field) SetValue(v reflect.Value) {
+	if v.Type() != f.value.Type() {
+		v = v.Convert(f.value.Type())
+	}
+	f.value.Set(v)
+}
+
+func (f Field) Config() FieldConfig {
+	return f.config
+}
+
 // NewField returns an instance of a Comfy Field
-func NewField(structField reflect.StructField, value reflect.Value, parent *Field) (Field, error) {
-	conf, err := fieldTagConfigs(structField)
+func NewField(name string, value reflect.Value, conf FieldConfig, parent *Field) (Field, error) {
+	return Field{
+		name:   name,
+		value:  value,
+		isPtr:  value.Kind() == reflect.Pointer,
+		parent: parent,
+		config: conf,
+	}, nil
+}
+
+func NewFieldFromStructField(sField reflect.StructField, value reflect.Value, parent *Field) (Field, error) {
+	conf, err := fieldTagConfigs(sField)
 	if err != nil {
-		return Field{}, err
+		return Field{}, fmt.Errorf("comfy.NewFieldFromStructField fieldTagConfigs: %w", err)
 	}
 	return Field{
-		structField: structField,
-		value:       value,
-		isPtr:       value.Kind() == reflect.Pointer,
-		parent:      parent,
-		config:      conf,
+		name:   sField.Name,
+		value:  value,
+		isPtr:  value.Kind() == reflect.Pointer,
+		parent: parent,
+		config: conf,
 	}, nil
 }
 
 // Load will load this field from the configuration source, and returns true when the configuration exists and was loaded.
 // When no error, but also no configuration matched for this field, it returns false.
 func (f Field) Load() (loaded bool, err error) {
-	if !f.structField.IsExported() {
-		return false, nil
-	}
 	name := f.EnvName()
 
 	// Create a copy value to serve as the parsing target
@@ -57,7 +75,7 @@ func (f Field) Load() (loaded bool, err error) {
 	if copyValue.Kind() == reflect.Struct && !copyValue.Addr().Type().Implements(parserType) {
 		// Struct Type
 		// Check if is of FileField type
-		if fileFieldMatcher.MatchString(f.structField.Type.Name()) {
+		if fileFieldMatcher.MatchString(f.value.Type().Name()) {
 			filePath := os.Getenv(f.FileEnvName())
 			if filePath == "" {
 				return false, fmt.Errorf("comfy expects %s variable to be set", f.FileEnvName())
@@ -66,7 +84,7 @@ func (f Field) Load() (loaded bool, err error) {
 			loaded = true
 		} else {
 			// Load the struct fields
-			tmpField, err := NewField(f.structField, copyValue, f.parent)
+			tmpField, err := NewField(f.name, copyValue, f.config, f.parent)
 			if err != nil {
 				return false, err
 			}
@@ -79,7 +97,7 @@ func (f Field) Load() (loaded bool, err error) {
 		if err != nil {
 			return false, err
 		}
-		if err := parse(f.structField.Name, envValue, copyValue); err != nil {
+		if err := parse(f.name, envValue, copyValue); err != nil {
 			return false, err
 		}
 		loaded = true
@@ -115,7 +133,7 @@ func (f Field) AsEnvPrefix() string {
 // When a custom name is set, it will use that name without any prefix
 func (f Field) EnvName() string {
 	if f.config.HasCustomEnvName() {
-		return *f.config.envName
+		return *f.config.customEnvName
 	}
 	prefix := ""
 	if f.parent != nil {
@@ -135,8 +153,8 @@ func (f Field) FileEnvName() string {
 }
 
 func (f Field) baseEnvName() string {
-	if f.config.envName != nil {
-		return *f.config.envName
+	if f.config.customEnvName != nil {
+		return *f.config.customEnvName
 	}
-	return ConvertToEnvName(f.structField.Name)
+	return ConvertToEnvName(f.name)
 }

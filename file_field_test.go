@@ -2,7 +2,6 @@ package comfy
 
 import (
 	"os"
-	"reflect"
 	"testing"
 	"time"
 )
@@ -33,7 +32,7 @@ func TestFileField(t *testing.T) {
 		f := testSetupFileVariable(t, "testFromFile")
 		fileField := NewFileField[string](
 			Field{
-				structField: reflect.StructField{Name: "test"},
+				name: "test",
 			},
 			f.Name(),
 		)
@@ -61,7 +60,7 @@ func TestFileField(t *testing.T) {
 		f := testSetupFileVariable(t, "1234")
 		fileField := NewFileField[int](
 			Field{
-				structField: reflect.StructField{Name: "test"},
+				name: "test",
 			},
 			f.Name(),
 		)
@@ -77,7 +76,7 @@ func TestFileField(t *testing.T) {
 		f := testSetupFileVariable(t, "1234")
 		fileField := NewFileField[int](
 			Field{
-				structField: reflect.StructField{Name: "test"},
+				name: "test",
 			},
 			f.Name(),
 		)

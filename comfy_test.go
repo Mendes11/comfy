@@ -3,6 +3,7 @@ package comfy_test
 import (
 	"fmt"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -237,6 +238,32 @@ func TestBaseStructLoad(t *testing.T) {
 		}
 		if conf.Inner.Var2 != "test_inner_var_2" {
 			t.Fatalf("expected conf.Inner.Var2 to be 'test_inner_var_2', got '%s'", conf.Inner.Var2)
+		}
+	})
+
+	t.Run("array values supported", func(t *testing.T) {
+		type Config struct {
+			ArrVar        []string
+			ArrVar2       []string
+			ArrCustomType []MyType
+		}
+		t.Setenv("ARR_VAR", "val1,val2,val3")
+		t.Setenv("ARR_CUSTOM_TYPE", "val@1,test@2,another@3")
+		conf := Config{
+			ArrVar2: []string{"default_value"},
+		}
+		err := comfy.Load(&conf)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !slices.Equal(conf.ArrVar, []string{"val1", "val2", "val3"}) {
+			t.Fatalf("expected ArrVar to be [val1, val2, val3], got %v", conf.ArrVar)
+		}
+		if !slices.Equal(conf.ArrVar2, []string{"default_value"}) {
+			t.Fatalf("expected ArrVar2 to be [default_value], got %v", conf.ArrVar2)
+		}
+		if !slices.Equal(conf.ArrCustomType, []MyType{{"val", 1}, {"test", 2}, {"another", 3}}) {
+			t.Fatalf("expected ArrCustomType to be [{val, 1}, {test, 2}, {another, 3}], got %v", conf.ArrCustomType)
 		}
 	})
 }

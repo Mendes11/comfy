@@ -48,7 +48,7 @@ func (f *FileField[T]) listenToChanges() {
 	for range t.C {
 		v, err := f.Value()
 		if err != nil {
-			slog.Error("[Comfy] Listener failed to obtain value", "field", f.field.structField.Name, "error", err.Error())
+			slog.Error("[Comfy] Listener failed to obtain value", "field", f.field.name, "error", err.Error())
 			continue
 		}
 		if v != f.currentValue {
@@ -65,7 +65,7 @@ func (f *FileField[T]) Value() (T, error) {
 		return *v, fmt.Errorf("loadFromPath failed: %w", err)
 	}
 	vValue := reflect.ValueOf(v)
-	err = parse(f.field.structField.Name, stringVal, vValue.Elem())
+	err = parse(f.field.name, stringVal, vValue.Elem())
 	if err != nil {
 		return *v, fmt.Errorf("parse failed: %w", err)
 	}

@@ -1,7 +1,9 @@
 package comfy
 
 import (
+	"fmt"
 	"reflect"
+	"strings"
 
 	"github.com/Mendes11/comfy/parsers"
 )
@@ -23,6 +25,7 @@ func parse(fieldName, value string, target reflect.Value) error {
 	if target.Type().Kind() == reflect.Pointer {
 		nonPtrTarget = target.Elem()
 	}
+	typeValue := nonPtrTarget.Type()
 
 	if nonPtrTarget.Addr().Type().Implements(parserType) {
 		ret := nonPtrTarget.Addr().MethodByName("ComfyParse").Call([]reflect.Value{reflect.ValueOf(value)})
@@ -38,13 +41,23 @@ func parse(fieldName, value string, target reflect.Value) error {
 		}
 		return nil
 
-	} else if parser, ok := parsers.Get(nonPtrTarget); ok {
+	} else if typeValue.Kind() == reflect.Slice {
+		values := strings.Split(value, ",")
+		for i, v := range values {
+			targetValue := reflect.New(typeValue.Elem()).Elem()
+			if err := parse(fmt.Sprintf("%s[%d]", fieldName, i), v, targetValue); err != nil {
+				return err
+			}
+			nonPtrTarget.Set(reflect.Append(nonPtrTarget, targetValue))
+		}
+		return nil
+	} else if parser, ok := parsers.Get(typeValue); ok {
 		err := parser(value, target)
 		if err != nil {
 			err = TypeMismatchError{
 				FieldName:  fieldName,
 				FieldValue: value,
-				TargetType: target.Type(),
+				TargetType: typeValue,
 				Err:        err,
 			}
 		}
@@ -58,7 +71,10 @@ func loadStructFields(field Field) (bool, error) {
 	loaded := false
 
 	for structField, fieldValue := range field.value.Fields() {
-		child, err := NewField(structField, fieldValue, &field)
+		if !structField.IsExported() {
+			continue
+		}
+		child, err := NewFieldFromStructField(structField, fieldValue, &field)
 		if err != nil {
 			return false, err
 		}
