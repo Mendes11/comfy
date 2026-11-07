@@ -65,7 +65,7 @@ func (f *FileField[T]) Value() (T, error) {
 		return *v, fmt.Errorf("loadFromPath failed: %w", err)
 	}
 	vValue := reflect.ValueOf(v)
-	err = parse(f.field.name, stringVal, vValue.Elem())
+	err = parse(f.field.name, stringVal, vValue.Elem(), f.field.config)
 	if err != nil {
 		return *v, fmt.Errorf("parse failed: %w", err)
 	}
