@@ -25,9 +25,9 @@ func parse(fieldName, value string, target reflect.Value) error {
 	if target.Type().Kind() == reflect.Pointer {
 		nonPtrTarget = target.Elem()
 	}
-	typeValue := nonPtrTarget.Type()
+	valueType := nonPtrTarget.Type()
 
-	if nonPtrTarget.Addr().Type().Implements(parserType) {
+	if implementsComfyParser(nonPtrTarget) {
 		ret := nonPtrTarget.Addr().MethodByName("ComfyParse").Call([]reflect.Value{reflect.ValueOf(value)})
 		if !ret[0].IsNil() {
 			err := ret[0].Interface().(error)
@@ -41,23 +41,23 @@ func parse(fieldName, value string, target reflect.Value) error {
 		}
 		return nil
 
-	} else if typeValue.Kind() == reflect.Slice {
+	} else if valueType.Kind() == reflect.Slice {
 		values := strings.Split(value, ",")
 		for i, v := range values {
-			targetValue := reflect.New(typeValue.Elem()).Elem()
-			if err := parse(fmt.Sprintf("%s[%d]", fieldName, i), v, targetValue); err != nil {
+			sliceValue := reflect.New(valueType.Elem()).Elem()
+			if err := parse(fmt.Sprintf("%s[%d]", fieldName, i), v, sliceValue); err != nil {
 				return err
 			}
-			nonPtrTarget.Set(reflect.Append(nonPtrTarget, targetValue))
+			nonPtrTarget.Set(reflect.Append(nonPtrTarget, sliceValue))
 		}
 		return nil
-	} else if parser, ok := parsers.Get(typeValue); ok {
+	} else if parser, ok := parsers.Get(valueType); ok {
 		err := parser(value, target)
 		if err != nil {
 			err = TypeMismatchError{
 				FieldName:  fieldName,
 				FieldValue: value,
-				TargetType: typeValue,
+				TargetType: valueType,
 				Err:        err,
 			}
 		}
@@ -67,22 +67,6 @@ func parse(fieldName, value string, target reflect.Value) error {
 	return MissingParserError{TargetType: target.Type()}
 }
 
-func loadStructFields(field Field) (bool, error) {
-	loaded := false
-
-	for structField, fieldValue := range field.value.Fields() {
-		if !structField.IsExported() {
-			continue
-		}
-		child, err := NewFieldFromStructField(structField, fieldValue, &field)
-		if err != nil {
-			return false, err
-		}
-		childLoaded, err := child.Load()
-		if err != nil {
-			return false, err
-		}
-		loaded = loaded || childLoaded
-	}
-	return loaded, nil
+func implementsComfyParser(value reflect.Value) bool {
+	return value.Type().Implements(parserType) || value.Addr().Type().Implements(parserType)
 }

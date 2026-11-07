@@ -8,11 +8,11 @@ import (
 )
 
 type Comfy[T any] struct {
-	Config *T `comfy:",no-prefix"`
+	Config T `comfy:",no-prefix"`
 }
 
 // New instance of a Comfy loader
-func New[T any](conf *T) *Comfy[T] {
+func New[T any](conf T) *Comfy[T] {
 	return &Comfy[T]{Config: conf}
 }
 
@@ -21,15 +21,11 @@ func (c *Comfy[T]) Load() error {
 	if err := setup(); err != nil {
 		return fmt.Errorf("comfy.Load setup failed: %w", err)
 	}
-	confValue := reflect.ValueOf(c.Config)
-	if confValue.Kind() != reflect.Pointer {
-		return ErrExpectedPtr
-	}
+	confValue := reflect.ValueOf(&c.Config)
 	if confValue.Elem().Kind() != reflect.Struct {
 		return ErrExpectedStructType
 	}
-
-	f, err := NewField("Config", confValue.Elem(), FieldConfig{noPrefix: true}, nil)
+	f, err := newFieldsGraph("Config", confValue.Elem(), FieldConfig{noPrefix: true}, nil)
 	if err != nil {
 		return fmt.Errorf("comfy.Comfy#Load failed: %w", err)
 	}
@@ -40,10 +36,14 @@ func (c *Comfy[T]) Load() error {
 	return nil
 }
 
-// Load the values into the given configuration variable.
-// conf must be a pointer
+// Load the values inplace of the given configuration pointer.
 func Load[T any](conf *T) error {
-	return New(conf).Load()
+	comfy := New(*conf)
+	if err := comfy.Load(); err != nil {
+		return err
+	}
+	*conf = comfy.Config
+	return nil
 }
 
 // LoadConfig will return a new configuration object based on the type parameter T.
@@ -53,9 +53,9 @@ func LoadConfig[T any]() (T, error) {
 	if envDefault, exists := environments[AppEnvironment()]; exists {
 		conf = envDefault.(T)
 	}
-	c := New(&conf)
+	c := New(conf)
 	err := c.Load()
-	return *c.Config, err
+	return c.Config, err
 }
 
 func setup() error {

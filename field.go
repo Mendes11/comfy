@@ -9,6 +9,83 @@ import (
 
 var fileFieldMatcher = regexp.MustCompile(`^FileField\[.*?\]$`)
 
+// NewField returns an instance of a Comfy Field
+func NewField(name string, value reflect.Value, conf FieldConfig, parent *Field) (Field, error) {
+	if !(value.CanSet() || (value.Kind() == reflect.Pointer && value.Elem().CanSet())) {
+		return Field{}, fmt.Errorf("Value of %s must be settable", fieldPath(name, parent))
+	}
+	return Field{
+		name:   name,
+		value:  value,
+		isPtr:  value.Kind() == reflect.Pointer,
+		parent: parent,
+		config: conf,
+	}, nil
+}
+
+func newFieldFromStructField(sField reflect.StructField, value reflect.Value, parent *Field) (Field, error) {
+	conf, err := fieldTagConfigs(sField)
+	if err != nil {
+		return Field{}, fmt.Errorf("comfy.NewFieldFromStructField fieldTagConfigs: %w", err)
+	}
+	f := Field{
+		name:   sField.Name,
+		value:  value,
+		isPtr:  value.Kind() == reflect.Pointer,
+		parent: parent,
+		config: conf,
+	}
+	if isStruct(value) {
+		for structField, value := range value.Fields() {
+			child, err := newFieldFromStructField(structField, value, &f)
+			if err != nil {
+				return f, fmt.Errorf("comfy.newFieldFromStructField failed to mount %s.%s: %w", f.name, structField.Name, err)
+			}
+			f.addChildren(child)
+		}
+	}
+	return f, nil
+}
+
+// newFieldsGraph loads all fields and their nested fields from a root struct value
+// value has to be a reflection of a Struct field or of a pointer of one.
+// It'll exclude from loading as a field:
+// - Private fields of a Field instance of a struct
+// - Attributes of a Field that implements the ComfyParser interface
+func newFieldsGraph(name string, value reflect.Value, fConf FieldConfig, parent *Field) (field Field, err error) {
+	field, err = NewField(name, value, fConf, parent)
+	if err != nil {
+		return field, fmt.Errorf("comfy.newFieldsGraph failed to mount field for %s: %w", name, err)
+	}
+	// Nil values won't resolve as structs. Their .Kind() resolves to Invalid.
+	// So I allocate a value to be able to resolve the struct fields in case of a Struct
+	// and be able to go down the children and load them as well
+	if value.Kind() == reflect.Pointer && value.IsNil() {
+		value = reflect.New(value.Type().Elem()).Elem()
+	}
+	if isStruct(value) && !implementsComfyParser(value) {
+		if value.Kind() == reflect.Pointer {
+			value = value.Elem()
+		}
+		for structField, childValue := range value.Fields() {
+			if !structField.IsExported() {
+				continue
+			}
+			conf, err := fieldTagConfigs(structField)
+			if err != nil {
+				return field, fmt.Errorf("comfy.newFieldsGraph failed to load tags for %s.%s: %w", name, structField.Name, err)
+			}
+			child, err := newFieldsGraph(structField.Name, childValue, conf, &field)
+			if err != nil {
+				return field, err
+			}
+			field.addChildren(child)
+		}
+	}
+
+	return field, nil
+}
+
 // Field represents a single configurable field loaded by Comfy
 type Field struct {
 	name  string
@@ -16,7 +93,9 @@ type Field struct {
 	isPtr bool
 
 	parent *Field
-	config FieldConfig
+	// When this is of type Struct, we store all its fields here.
+	children []Field
+	config   FieldConfig
 }
 
 func (f Field) SetValue(v reflect.Value) {
@@ -30,34 +109,20 @@ func (f Field) Config() FieldConfig {
 	return f.config
 }
 
-// NewField returns an instance of a Comfy Field
-func NewField(name string, value reflect.Value, conf FieldConfig, parent *Field) (Field, error) {
-	return Field{
-		name:   name,
-		value:  value,
-		isPtr:  value.Kind() == reflect.Pointer,
-		parent: parent,
-		config: conf,
-	}, nil
-}
-
-func NewFieldFromStructField(sField reflect.StructField, value reflect.Value, parent *Field) (Field, error) {
-	conf, err := fieldTagConfigs(sField)
-	if err != nil {
-		return Field{}, fmt.Errorf("comfy.NewFieldFromStructField fieldTagConfigs: %w", err)
-	}
-	return Field{
-		name:   sField.Name,
-		value:  value,
-		isPtr:  value.Kind() == reflect.Pointer,
-		parent: parent,
-		config: conf,
-	}, nil
+func (f *Field) addChildren(children Field) {
+	f.children = append(f.children, children)
 }
 
 // Load will load this field from the configuration source, and returns true when the configuration exists and was loaded.
 // When no error, but also no configuration matched for this field, it returns false.
 func (f Field) Load() (loaded bool, err error) {
+	// Load the fields bottom to top
+	for _, c := range f.children {
+		loaded, err = c.Load()
+		if err != nil {
+			return loaded, fmt.Errorf("%w", err)
+		}
+	}
 	name := f.EnvName()
 
 	// Create a copy value to serve as the parsing target
@@ -72,27 +137,15 @@ func (f Field) Load() (loaded bool, err error) {
 	}
 
 	// Route the field to its appropriate loading function
-	if copyValue.Kind() == reflect.Struct && !copyValue.Addr().Type().Implements(parserType) {
-		// Struct Type
-		// Check if is of FileField type
-		if fileFieldMatcher.MatchString(f.value.Type().Name()) {
-			filePath := os.Getenv(f.FileEnvName())
-			if filePath == "" {
-				return false, fmt.Errorf("comfy expects %s variable to be set", f.FileEnvName())
-			}
-			copyValue.Addr().MethodByName("Setup").Call([]reflect.Value{reflect.ValueOf(f), reflect.ValueOf(filePath)})
-			loaded = true
-		} else {
-			// Load the struct fields
-			tmpField, err := NewField(f.name, copyValue, f.config, f.parent)
-			if err != nil {
-				return false, err
-			}
-			loaded, err = loadStructFields(tmpField)
-			if err != nil {
-				return false, err
-			}
+	// Check if is of FileField type
+	if fileFieldMatcher.MatchString(f.value.Type().Name()) {
+		filePath := os.Getenv(f.FileEnvName())
+		if filePath == "" {
+			return false, fmt.Errorf("comfy expects %s variable to be set", f.FileEnvName())
 		}
+		copyValue.Addr().MethodByName("Setup").Call([]reflect.Value{reflect.ValueOf(f), reflect.ValueOf(filePath)})
+		loaded = true
+
 	} else if envValue, exists, err := loadEnvVar(name, name+f.config.fileSuffix); exists || err != nil {
 		if err != nil {
 			return false, err
@@ -157,4 +210,19 @@ func (f Field) baseEnvName() string {
 		return *f.config.customEnvName
 	}
 	return ConvertToEnvName(f.name)
+}
+
+func isStruct(value reflect.Value) bool {
+	return value.Kind() == reflect.Struct || (value.Kind() == reflect.Pointer && value.Elem().Kind() == reflect.Struct)
+}
+
+func fieldPath(name string, parent *Field) string {
+	path := ""
+	if parent != nil {
+		path = fieldPath(parent.name, parent.parent)
+	}
+	if path != "" {
+		return fmt.Sprintf("%s.%s", path, name)
+	}
+	return name
 }
