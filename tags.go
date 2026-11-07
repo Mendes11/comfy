@@ -4,11 +4,13 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+
+	"github.com/Mendes11/comfy/parsers"
 )
 
 const DefaultFileSuffix = "_FILE"
 
-// FieldConfig holds all configurations of a single struct field
+// FieldConfig holds all tag configurations for a single struct field
 type FieldConfig struct {
 	customEnvName *string
 	fileSuffix    string
@@ -18,6 +20,12 @@ type FieldConfig struct {
 
 func (f FieldConfig) HasCustomEnvName() bool {
 	return f.customEnvName != nil && *f.customEnvName != ""
+}
+
+func (f FieldConfig) AsParserOpts() parsers.ParserOpts {
+	return parsers.ParserOpts{
+		DateFormat: f.format,
+	}
 }
 
 type tagConfigName string

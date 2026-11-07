@@ -23,69 +23,6 @@ func NewField(name string, value reflect.Value, conf FieldConfig, parent *Field)
 	}, nil
 }
 
-func newFieldFromStructField(sField reflect.StructField, value reflect.Value, parent *Field) (Field, error) {
-	conf, err := fieldTagConfigs(sField)
-	if err != nil {
-		return Field{}, fmt.Errorf("comfy.NewFieldFromStructField fieldTagConfigs: %w", err)
-	}
-	f := Field{
-		name:   sField.Name,
-		value:  value,
-		isPtr:  value.Kind() == reflect.Pointer,
-		parent: parent,
-		config: conf,
-	}
-	if isStruct(value) {
-		for structField, value := range value.Fields() {
-			child, err := newFieldFromStructField(structField, value, &f)
-			if err != nil {
-				return f, fmt.Errorf("comfy.newFieldFromStructField failed to mount %s.%s: %w", f.name, structField.Name, err)
-			}
-			f.addChildren(child)
-		}
-	}
-	return f, nil
-}
-
-// newFieldsGraph loads all fields and their nested fields from a root struct value
-// value has to be a reflection of a Struct field or of a pointer of one.
-// It'll exclude from loading as a field:
-// - Private fields of a Field instance of a struct
-// - Attributes of a Field that implements the ComfyParser interface
-func newFieldsGraph(name string, value reflect.Value, fConf FieldConfig, parent *Field) (field Field, err error) {
-	field, err = NewField(name, value, fConf, parent)
-	if err != nil {
-		return field, fmt.Errorf("comfy.newFieldsGraph failed to mount field for %s: %w", name, err)
-	}
-	// Nil values won't resolve as structs. Their .Kind() resolves to Invalid.
-	// So I allocate a value to be able to resolve the struct fields in case of a Struct
-	// and be able to go down the children and load them as well
-	if value.Kind() == reflect.Pointer && value.IsNil() {
-		value = reflect.New(value.Type().Elem()).Elem()
-	}
-	if isStruct(value) && !implementsComfyParser(value) {
-		if value.Kind() == reflect.Pointer {
-			value = value.Elem()
-		}
-		for structField, childValue := range value.Fields() {
-			if !structField.IsExported() {
-				continue
-			}
-			conf, err := fieldTagConfigs(structField)
-			if err != nil {
-				return field, fmt.Errorf("comfy.newFieldsGraph failed to load tags for %s.%s: %w", name, structField.Name, err)
-			}
-			child, err := newFieldsGraph(structField.Name, childValue, conf, &field)
-			if err != nil {
-				return field, err
-			}
-			field.addChildren(child)
-		}
-	}
-
-	return field, nil
-}
-
 // Field represents a single configurable field loaded by Comfy
 type Field struct {
 	name  string
@@ -139,6 +76,7 @@ func (f Field) Load() (loaded bool, err error) {
 	// Route the field to its appropriate loading function
 	// Check if is of FileField type
 	if fileFieldMatcher.MatchString(f.value.Type().Name()) {
+		// TODO: Can this become a parser? Now that I have the regexp registry? Or even ComfyParser interface, instead of Setup?
 		filePath := os.Getenv(f.FileEnvName())
 		if filePath == "" {
 			return false, fmt.Errorf("comfy expects %s variable to be set", f.FileEnvName())
@@ -150,7 +88,7 @@ func (f Field) Load() (loaded bool, err error) {
 		if err != nil {
 			return false, err
 		}
-		if err := parse(f.name, envValue, copyValue); err != nil {
+		if err := parse(f.name, envValue, copyValue, f.config); err != nil {
 			return false, err
 		}
 		loaded = true
@@ -225,4 +163,43 @@ func fieldPath(name string, parent *Field) string {
 		return fmt.Sprintf("%s.%s", path, name)
 	}
 	return name
+}
+
+// newFieldsGraph loads all fields and their nested fields from a root struct value
+// value has to be a reflection of a Struct field or of a pointer of one.
+// It'll exclude from loading as a field:
+// - Private fields of a Field instance of a struct
+// - Attributes of a Field that implements the ComfyParser interface
+func newFieldsGraph(name string, value reflect.Value, fConf FieldConfig, parent *Field) (field Field, err error) {
+	field, err = NewField(name, value, fConf, parent)
+	if err != nil {
+		return field, fmt.Errorf("comfy.newFieldsGraph failed to mount field for %s: %w", name, err)
+	}
+	// Nil values won't resolve as structs. Their .Kind() resolves to Invalid.
+	// So I allocate a value to be able to resolve the struct fields in case of a Struct
+	// and be able to go down the children and load them as well
+	if value.Kind() == reflect.Pointer && value.IsNil() {
+		value = reflect.New(value.Type().Elem()).Elem()
+	}
+	if isStruct(value) && !implementsComfyParser(value) {
+		if value.Kind() == reflect.Pointer {
+			value = value.Elem()
+		}
+		for structField, childValue := range value.Fields() {
+			if !structField.IsExported() {
+				continue
+			}
+			conf, err := fieldTagConfigs(structField)
+			if err != nil {
+				return field, fmt.Errorf("comfy.newFieldsGraph failed to load tags for %s.%s: %w", name, structField.Name, err)
+			}
+			child, err := newFieldsGraph(structField.Name, childValue, conf, &field)
+			if err != nil {
+				return field, err
+			}
+			field.addChildren(child)
+		}
+	}
+
+	return field, nil
 }

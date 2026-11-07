@@ -6,18 +6,18 @@ import (
 )
 
 func init() {
-	parserRegistry[reflect.Int8] = intParserFactory[int8](8)
-	parserRegistry[reflect.Int16] = intParserFactory[int16](16)
-	parserRegistry[reflect.Int32] = intParserFactory[int32](32)
-	parserRegistry[reflect.Int] = intParserFactory[int](32)
-	parserRegistry[reflect.Int64] = intParserFactory[int64](64)
+	parsersByKindRegistry[reflect.Int8] = intParserFactory[int8](8)
+	parsersByKindRegistry[reflect.Int16] = intParserFactory[int16](16)
+	parsersByKindRegistry[reflect.Int32] = intParserFactory[int32](32)
+	parsersByKindRegistry[reflect.Int] = intParserFactory[int](32)
+	parsersByKindRegistry[reflect.Int64] = intParserFactory[int64](64)
 
 	// Uints
-	parserRegistry[reflect.Uint8] = uintParserFactory[uint8](8)
-	parserRegistry[reflect.Uint16] = uintParserFactory[uint16](16)
-	parserRegistry[reflect.Uint32] = uintParserFactory[uint32](32)
-	parserRegistry[reflect.Uint] = uintParserFactory[uint](32)
-	parserRegistry[reflect.Uint64] = uintParserFactory[uint64](64)
+	parsersByKindRegistry[reflect.Uint8] = uintParserFactory[uint8](8)
+	parsersByKindRegistry[reflect.Uint16] = uintParserFactory[uint16](16)
+	parsersByKindRegistry[reflect.Uint32] = uintParserFactory[uint32](32)
+	parsersByKindRegistry[reflect.Uint] = uintParserFactory[uint](32)
+	parsersByKindRegistry[reflect.Uint64] = uintParserFactory[uint64](64)
 }
 
 type Ints interface {
@@ -28,8 +28,8 @@ type UInts interface {
 	uint | uint8 | uint16 | uint32 | uint64
 }
 
-func intParserFactory[K Ints](bitSize int) func(string, reflect.Value) error {
-	return func(s string, target reflect.Value) error {
+func intParserFactory[K Ints](bitSize int) ParseFunc {
+	return func(s string, target reflect.Value, opts ParserOpts) error {
 		v, err := strconv.ParseInt(s, 10, bitSize)
 		if err != nil {
 			return err
@@ -40,8 +40,8 @@ func intParserFactory[K Ints](bitSize int) func(string, reflect.Value) error {
 	}
 }
 
-func uintParserFactory[K UInts](bitSize int) func(string, reflect.Value) error {
-	return func(s string, target reflect.Value) error {
+func uintParserFactory[K UInts](bitSize int) ParseFunc {
+	return func(s string, target reflect.Value, opts ParserOpts) error {
 		v, err := strconv.ParseUint(s, 10, bitSize)
 		if err != nil {
 			return err

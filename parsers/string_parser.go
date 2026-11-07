@@ -3,18 +3,10 @@ package parsers
 import "reflect"
 
 func init() {
-	parserRegistry[reflect.String] = parseString
+	parsersByKindRegistry[reflect.String] = parseString
 }
 
-func parseString(s string, target reflect.Value) error {
+func parseString(s string, target reflect.Value, opts ParserOpts) error {
 	setValue(target, reflect.ValueOf(s))
 	return nil
-}
-
-// setValue ensures we correctly convert the value to the user type
-func setValue(target reflect.Value, value reflect.Value) {
-	if value.Type() != target.Type() {
-		value = value.Convert(target.Type())
-	}
-	target.Set(value)
 }

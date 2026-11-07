@@ -6,10 +6,10 @@ import (
 )
 
 func init() {
-	parserRegistry[reflect.Bool] = parseBool
+	parsersByKindRegistry[reflect.Bool] = parseBool
 }
 
-func parseBool(s string, target reflect.Value) error {
+func parseBool(s string, target reflect.Value, opts ParserOpts) error {
 	value := strings.ToLower(s) == "true"
 	setValue(target, reflect.ValueOf(value))
 	return nil
