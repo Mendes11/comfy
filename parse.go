@@ -10,7 +10,7 @@ import (
 
 // ComfyParser interface parses a given string inplace.
 type ComfyParser interface {
-	ComfyParse(s string) error
+	ComfyParse(s string, opts parsers.ParserOpts) error
 }
 
 var parserType = reflect.TypeOf((*ComfyParser)(nil)).Elem()
@@ -20,7 +20,7 @@ var parserType = reflect.TypeOf((*ComfyParser)(nil)).Elem()
 // When it doesn't have a builtin parser, or it doesn't implement ComfyParser, it returns a MissingParserError.
 //
 // If the parse fails, then TypeMismatchError is returned.
-func parse(fieldName, value string, target reflect.Value, opts FieldConfig) error {
+func parse(fieldName, value string, target reflect.Value, fc FieldConfig) error {
 	nonPtrTarget := target
 	if target.Type().Kind() == reflect.Pointer {
 		nonPtrTarget = target.Elem()
@@ -28,7 +28,7 @@ func parse(fieldName, value string, target reflect.Value, opts FieldConfig) erro
 	valueType := nonPtrTarget.Type()
 
 	if implementsComfyParser(nonPtrTarget) {
-		ret := nonPtrTarget.Addr().MethodByName("ComfyParse").Call([]reflect.Value{reflect.ValueOf(value)})
+		ret := nonPtrTarget.Addr().MethodByName("ComfyParse").Call([]reflect.Value{reflect.ValueOf(value), reflect.ValueOf(fc.AsParserOpts())})
 		if !ret[0].IsNil() {
 			err := ret[0].Interface().(error)
 			err = TypeMismatchError{
@@ -45,14 +45,14 @@ func parse(fieldName, value string, target reflect.Value, opts FieldConfig) erro
 		values := strings.Split(value, ",")
 		for i, v := range values {
 			sliceValue := reflect.New(valueType.Elem()).Elem()
-			if err := parse(fmt.Sprintf("%s[%d]", fieldName, i), v, sliceValue, opts); err != nil {
+			if err := parse(fmt.Sprintf("%s[%d]", fieldName, i), v, sliceValue, fc); err != nil {
 				return err
 			}
 			nonPtrTarget.Set(reflect.Append(nonPtrTarget, sliceValue))
 		}
 		return nil
 	} else if parser, ok := parsers.GetForType(valueType); ok {
-		err := parser(value, target, opts.AsParserOpts())
+		err := parser(value, target, fc.AsParserOpts())
 		if err != nil {
 			err = TypeMismatchError{
 				FieldName:  fieldName,

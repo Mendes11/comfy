@@ -2,25 +2,31 @@ package comfy
 
 import (
 	"fmt"
-	"os"
 	"reflect"
-	"regexp"
 )
 
-var fileFieldMatcher = regexp.MustCompile(`^FileField\[.*?\]$`)
+type ComfyField interface {
+	ComfySetup(fieldName string, cfg FieldConfig) error
+}
+
+var comfyFieldType = reflect.TypeOf((*ComfyField)(nil)).Elem()
 
 // NewField returns an instance of a Comfy Field
 func NewField(name string, value reflect.Value, conf FieldConfig, parent *Field) (Field, error) {
 	if !(value.CanSet() || (value.Kind() == reflect.Pointer && value.Elem().CanSet())) {
 		return Field{}, fmt.Errorf("Value of %s must be settable", fieldPath(name, parent))
 	}
-	return Field{
+	field := Field{
 		name:   name,
 		value:  value,
 		isPtr:  value.Kind() == reflect.Pointer,
 		parent: parent,
 		config: conf,
-	}, nil
+	}
+	if err := callComfyFieldInterface(field); err != nil {
+		return field, fmt.Errorf("comfy.NewField ComfySetup failed for %s: %w", fieldPath(name, parent), err)
+	}
+	return field, nil
 }
 
 // Field represents a single configurable field loaded by Comfy
@@ -60,7 +66,6 @@ func (f Field) Load() (loaded bool, err error) {
 			return loaded, fmt.Errorf("%w", err)
 		}
 	}
-	name := f.EnvName()
 
 	// Create a copy value to serve as the parsing target
 	// This temporary value is used to make sure optional fields can keep their nil value when nothing loaded,
@@ -74,17 +79,7 @@ func (f Field) Load() (loaded bool, err error) {
 	}
 
 	// Route the field to its appropriate loading function
-	// Check if is of FileField type
-	if fileFieldMatcher.MatchString(f.value.Type().Name()) {
-		// TODO: Can this become a parser? Now that I have the regexp registry? Or even ComfyParser interface, instead of Setup?
-		filePath := os.Getenv(f.FileEnvName())
-		if filePath == "" {
-			return false, fmt.Errorf("comfy expects %s variable to be set", f.FileEnvName())
-		}
-		copyValue.Addr().MethodByName("Setup").Call([]reflect.Value{reflect.ValueOf(f), reflect.ValueOf(filePath)})
-		loaded = true
-
-	} else if envValue, exists, err := loadEnvVar(name, name+f.config.fileSuffix); exists || err != nil {
+	if envValue, exists, err := loadEnvVar(f); exists || err != nil {
 		if err != nil {
 			return false, err
 		}
@@ -110,7 +105,7 @@ func (f Field) AsEnvPrefix() string {
 	if f.parent != nil {
 		p = f.parent.AsEnvPrefix()
 	}
-	if !f.config.noPrefix {
+	if !f.config.NoPrefix {
 		envName := f.baseEnvName()
 		if p != "" {
 			p += "_"
@@ -124,7 +119,7 @@ func (f Field) AsEnvPrefix() string {
 // When a custom name is set, it will use that name without any prefix
 func (f Field) EnvName() string {
 	if f.config.HasCustomEnvName() {
-		return *f.config.customEnvName
+		return *f.config.CustomEnvName
 	}
 	prefix := ""
 	if f.parent != nil {
@@ -140,12 +135,12 @@ func (f Field) EnvName() string {
 }
 
 func (f Field) FileEnvName() string {
-	return f.EnvName() + f.config.fileSuffix
+	return f.EnvName() + f.config.FileSuffix
 }
 
 func (f Field) baseEnvName() string {
-	if f.config.customEnvName != nil {
-		return *f.config.customEnvName
+	if f.config.CustomEnvName != nil {
+		return *f.config.CustomEnvName
 	}
 	return ConvertToEnvName(f.name)
 }
@@ -202,4 +197,22 @@ func newFieldsGraph(name string, value reflect.Value, fConf FieldConfig, parent 
 	}
 
 	return field, nil
+}
+
+// callComfyFieldInterface verifies if the field implements it and
+// calls ComfySetup.
+func callComfyFieldInterface(f Field) error {
+	var value reflect.Value
+	if f.value.Type().Implements(comfyFieldType) {
+		value = f.value
+	} else if f.value.CanAddr() && f.value.Addr().Type().Implements(comfyFieldType) {
+		value = f.value.Addr()
+	} else {
+		return nil
+	}
+	res := value.MethodByName("ComfySetup").Call([]reflect.Value{reflect.ValueOf(f.name), reflect.ValueOf(f.config)})
+	if res[0].Interface() == nil {
+		return nil
+	}
+	return res[0].Interface().(error)
 }

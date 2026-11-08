@@ -10,53 +10,70 @@ import (
 
 const DefaultFileSuffix = "_FILE"
 
-// FieldConfig holds all tag configurations for a single struct field
+var DefaultFieldConfig = FieldConfig{
+	FileSuffix:            DefaultFileSuffix,
+	AutoFileLookupEnabled: true,
+	NoPrefix:              false,
+	Format:                "",
+}
+
+// FieldConfig holds how fields are going to be loaded and looked up
 type FieldConfig struct {
-	customEnvName *string
-	fileSuffix    string
-	noPrefix      bool
-	format        string
+	CustomEnvName         *string // set by the comfy tag
+	FileSuffix            string
+	NoPrefix              bool
+	Format                string
+	AutoFileLookupEnabled bool
+}
+
+func NewFieldConfig() FieldConfig {
+	return DefaultFieldConfig
 }
 
 func (f FieldConfig) HasCustomEnvName() bool {
-	return f.customEnvName != nil && *f.customEnvName != ""
+	return f.CustomEnvName != nil && *f.CustomEnvName != ""
 }
 
 func (f FieldConfig) AsParserOpts() parsers.ParserOpts {
 	return parsers.ParserOpts{
-		DateFormat: f.format,
+		DateFormat: f.Format,
 	}
 }
 
 type tagConfigName string
 
 const (
-	tagConfNoPrefix tagConfigName = "no-prefix"
-	tagConfFormat   tagConfigName = "format"
+	tagConfNoPrefix   tagConfigName = "no-prefix"
+	tagConfFormat     tagConfigName = "format"
+	tagConfFileSuffix tagConfigName = "file-suffix"
 )
 
 type tagConfigApply func(*FieldConfig, string) error
 
 // tagAppliers maps every possible Comfy tag settings to a function that modifies FieldConfig
 var tagAppliers = map[tagConfigName]tagConfigApply{
-	tagConfNoPrefix: noPrefixApply,
-	tagConfFormat:   formatApply,
+	tagConfNoPrefix:   noPrefixApply,
+	tagConfFormat:     formatApply,
+	tagConfFileSuffix: fileSuffixApply,
 }
 
 var noPrefixApply = func(c *FieldConfig, value string) error {
-	c.noPrefix = true
+	c.NoPrefix = true
 	return nil
 }
 
 var formatApply = func(c *FieldConfig, value string) error {
-	c.format = value
+	c.Format = value
+	return nil
+}
+
+var fileSuffixApply = func(c *FieldConfig, value string) error {
+	c.FileSuffix = value
 	return nil
 }
 
 func fieldTagConfigs(structField reflect.StructField) (FieldConfig, error) {
-	conf := FieldConfig{
-		fileSuffix: DefaultFileSuffix,
-	}
+	conf := NewFieldConfig()
 	tagValuesStr, exists := structField.Tag.Lookup("comfy")
 	if !exists {
 		return conf, nil
@@ -65,11 +82,11 @@ func fieldTagConfigs(structField reflect.StructField) (FieldConfig, error) {
 
 	if len(tagValues) == 0 {
 		emptyName := ""
-		conf.customEnvName = &emptyName
+		conf.CustomEnvName = &emptyName
 		return conf, nil
 	}
 
-	conf.customEnvName = &tagValues[0]
+	conf.CustomEnvName = &tagValues[0]
 	for _, tagConf := range tagValues[1:] {
 		tagConfValues := strings.Split(tagConf, "=")
 		tagConfName := tagConfValues[0]

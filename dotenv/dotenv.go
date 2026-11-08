@@ -87,7 +87,6 @@ func loadEnvFromFile(path string) error {
 		if len(match) == 0 {
 			continue
 		}
-		fmt.Println(match)
 		if err = os.Setenv(match[1], match[2]); err != nil {
 			return fmt.Errorf("failed to set %s from file %s: %w", match[1], path, err)
 		}

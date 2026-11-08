@@ -1,9 +1,12 @@
-package comfy
+package comfy_test
 
 import (
 	"os"
 	"testing"
 	"time"
+
+	"github.com/Mendes11/comfy"
+	"github.com/Mendes11/comfy/parsers"
 )
 
 func testSetupFileVariable(t *testing.T, value string) *os.File {
@@ -30,12 +33,15 @@ func testSetupChangeFileVariable(path string, value string) error {
 func TestFileField(t *testing.T) {
 	t.Run("fileField loads when file changes", func(t *testing.T) {
 		f := testSetupFileVariable(t, "testFromFile")
-		fileField := NewFileField[string](
-			Field{
-				name: "test",
-			},
-			f.Name(),
-		)
+		fileField := comfy.FileField[string]{}
+		err := fileField.ComfySetup("someField", comfy.FieldConfig{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = fileField.ComfyParse(f.Name(), parsers.ParserOpts{})
+		if err != nil {
+			t.Fatal(err)
+		}
 		valBefore, err := fileField.Value()
 		if err != nil {
 			t.Fatal(err)
@@ -58,12 +64,16 @@ func TestFileField(t *testing.T) {
 
 	t.Run("fileField loads and parse from path", func(t *testing.T) {
 		f := testSetupFileVariable(t, "1234")
-		fileField := NewFileField[int](
-			Field{
-				name: "test",
-			},
-			f.Name(),
-		)
+
+		fileField := comfy.FileField[int]{}
+		err := fileField.ComfySetup("someField", comfy.FieldConfig{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = fileField.ComfyParse(f.Name(), parsers.ParserOpts{})
+		if err != nil {
+			t.Fatal(err)
+		}
 		val, err := fileField.Value()
 		if err != nil {
 			t.Fatal(err)
@@ -74,15 +84,18 @@ func TestFileField(t *testing.T) {
 	})
 	t.Run("fileField subscription to change", func(t *testing.T) {
 		f := testSetupFileVariable(t, "1234")
-		fileField := NewFileField[int](
-			Field{
-				name: "test",
-			},
-			f.Name(),
-		)
+		fileField := comfy.FileField[int]{}
+		err := fileField.ComfySetup("someField", comfy.FieldConfig{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = fileField.ComfyParse(f.Name(), parsers.ParserOpts{})
+		if err != nil {
+			t.Fatal(err)
+		}
 
 		oldValue, newValue := 0, 0
-		err := fileField.SubscribeToChange("test", func(id string, old int, newV int) {
+		err = fileField.SubscribeToChange("test", func(id string, old int, newV int) {
 			oldValue = old
 			newValue = newV
 		})
@@ -95,6 +108,32 @@ func TestFileField(t *testing.T) {
 		time.Sleep(2 * time.Second)
 		if oldValue != 1234 || newValue != 4321 {
 			t.Fatalf("expected oldValue to be 1234, got %d. newValue to be 4321, got %d", oldValue, newValue)
+		}
+	})
+	t.Run("fileField trims the spaces in content", func(t *testing.T) {
+		text := `
+	test
+	with newlines 
+
+`
+		expected := `test
+	with newlines`
+		f := testSetupFileVariable(t, text)
+		fileField := comfy.FileField[string]{}
+		err := fileField.ComfySetup("someField", comfy.FieldConfig{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = fileField.ComfyParse(f.Name(), parsers.ParserOpts{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		v, err := fileField.Value()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if v != expected {
+			t.Fatalf("expected newlines to be trimmed at the end, got %s", v)
 		}
 	})
 }

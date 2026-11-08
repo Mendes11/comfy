@@ -21,11 +21,11 @@ func (c *Comfy[T]) Load() error {
 	if err := setup(); err != nil {
 		return fmt.Errorf("comfy.Load setup failed: %w", err)
 	}
-	confValue := reflect.ValueOf(&c.Config)
-	if confValue.Elem().Kind() != reflect.Struct {
+	confValue := reflect.ValueOf(&c.Config).Elem()
+	if confValue.Kind() != reflect.Struct {
 		return ErrExpectedStructType
 	}
-	f, err := newFieldsGraph("Config", confValue.Elem(), FieldConfig{noPrefix: true}, nil)
+	f, err := newFieldsGraph("Config", confValue, FieldConfig{NoPrefix: true}, nil)
 	if err != nil {
 		return fmt.Errorf("comfy.Comfy#Load failed: %w", err)
 	}

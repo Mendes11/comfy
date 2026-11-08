@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/Mendes11/comfy"
+	"github.com/Mendes11/comfy/parsers"
 )
 
 type MyType struct {
@@ -16,7 +17,7 @@ type MyType struct {
 	intVal int
 }
 
-func (m *MyType) ComfyParse(v string) error {
+func (m *MyType) ComfyParse(v string, opts parsers.ParserOpts) error {
 	values := strings.Split(v, "@")
 	if len(values) != 2 {
 		return fmt.Errorf("expected a string split with an @")
@@ -33,7 +34,7 @@ func (m *MyType) ComfyParse(v string) error {
 // MyStringWithParser will truncate text to up to 10 characters
 type MyStringWithParser string
 
-func (m *MyStringWithParser) ComfyParse(s string) error {
+func (m *MyStringWithParser) ComfyParse(s string, opts parsers.ParserOpts) error {
 	*m = MyStringWithParser(s[:10])
 	return nil
 }
@@ -302,7 +303,7 @@ func TestAutomaticFileLoading(t *testing.T) {
 			Var1 comfy.FileField[int]
 		}
 		f := setupFileVariable(t, "444")
-		t.Setenv("VAR1_FILE", f.Name())
+		t.Setenv("VAR1", f.Name())
 
 		conf := &Config{}
 		err := comfy.Load(conf)

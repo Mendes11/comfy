@@ -34,9 +34,13 @@ func ConvertToEnvName(name string) string {
 }
 
 // loadEnvVar will try to load the env var by name or by its _FILE suffix.
-func loadEnvVar(envName string, fileEnvName string) (val string, loaded bool, err error) {
-	val, envExists := os.LookupEnv(envName)
-	filePath, fileEnvExists := os.LookupEnv(fileEnvName)
+func loadEnvVar(f Field) (val string, loaded bool, err error) {
+	val, envExists := os.LookupEnv(f.EnvName())
+	var filePath string
+	fileEnvExists := false
+	if f.config.AutoFileLookupEnabled {
+		filePath, fileEnvExists = os.LookupEnv(f.FileEnvName())
+	}
 	loaded = envExists || fileEnvExists
 
 	if !envExists && fileEnvExists {
@@ -54,5 +58,5 @@ func loadFromPath(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return string(valueBytes), nil
+	return strings.TrimSpace(string(valueBytes)), nil
 }
