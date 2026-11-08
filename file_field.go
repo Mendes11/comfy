@@ -11,8 +11,8 @@ import (
 )
 
 type fileChangeSubscription[T comparable] struct {
-	id       string
-	callback func(string, T, T)
+	id string
+	ch chan FileValueChangedEvent[T]
 }
 
 // FileField loads a configuration field from a filepath
@@ -31,6 +31,7 @@ func (f *FileField[T]) ComfySetup(fieldName string, fc FieldConfig) error {
 	f.fc = fc
 	// Disable so comfy doesn't load the contents from the path living on _FILE.
 	f.fc.AutoFileLookupEnabled = false
+	f.subscriptions = make(map[string]fileChangeSubscription[T])
 	return nil
 }
 
@@ -45,12 +46,17 @@ func (f *FileField[T]) ComfyParse(s string, opts parsers.ParserOpts) error {
 
 func (f *FileField[T]) notifyChange(oldValue, newValue T) {
 	for id, sub := range f.subscriptions {
-		sub.callback(id, oldValue, newValue)
+		sub.ch <- FileValueChangedEvent[T]{id, oldValue, newValue}
 	}
 }
 
 func (f *FileField[T]) listenToChanges() {
 	t := time.NewTicker(time.Second)
+	defer func() {
+		for _, sub := range f.subscriptions {
+			close(sub.ch)
+		}
+	}()
 	defer t.Stop()
 
 	for range t.C {
@@ -81,22 +87,26 @@ func (f *FileField[T]) Value() (T, error) {
 	return *v, nil
 }
 
-func (f *FileField[T]) SubscribeToChange(id string, sub func(id string, oldValue, newValue T)) error {
+type FileValueChangedEvent[T comparable] struct {
+	SubscriptionId string
+	OldValue       T
+	NewValue       T
+}
+
+func (f *FileField[T]) SubscribeToChange(id string) (<-chan FileValueChangedEvent[T], error) {
 	v, err := f.Value()
 	if err != nil {
-		return fmt.Errorf("comfy.SubscribeToChange failed to load initial value: %w", err)
+		return nil, fmt.Errorf("comfy.SubscribeToChange failed to load initial value: %w", err)
 	}
 	f.currentValue = v
-	if f.subscriptions == nil {
-		f.subscriptions = make(map[string]fileChangeSubscription[T])
-	}
+	ch := make(chan FileValueChangedEvent[T], 1)
 	f.subscriptions[id] = fileChangeSubscription[T]{
-		id:       id,
-		callback: sub,
+		id: id,
+		ch: ch,
 	}
 	if !f.listening {
 		f.listening = true
 		go f.listenToChanges()
 	}
-	return nil
+	return ch, nil
 }

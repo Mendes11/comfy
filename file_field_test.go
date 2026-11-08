@@ -82,6 +82,7 @@ func TestFileField(t *testing.T) {
 			t.Fatalf("expected 1234, got %d", val)
 		}
 	})
+
 	t.Run("fileField subscription to change", func(t *testing.T) {
 		f := testSetupFileVariable(t, "1234")
 		fileField := comfy.FileField[int]{}
@@ -95,21 +96,23 @@ func TestFileField(t *testing.T) {
 		}
 
 		oldValue, newValue := 0, 0
-		err = fileField.SubscribeToChange("test", func(id string, old int, newV int) {
-			oldValue = old
-			newValue = newV
-		})
+		ch, err := fileField.SubscribeToChange("test")
 		if err != nil {
 			t.Fatal(err)
 		}
 		if err := testSetupChangeFileVariable(f.Name(), "4321"); err != nil {
 			t.Fatal(err)
 		}
-		time.Sleep(2 * time.Second)
-		if oldValue != 1234 || newValue != 4321 {
-			t.Fatalf("expected oldValue to be 1234, got %d. newValue to be 4321, got %d", oldValue, newValue)
+		select {
+		case msg := <-ch:
+			if msg.OldValue != 1234 || msg.NewValue != 4321 {
+				t.Fatalf("expected oldValue to be 1234, got %d. newValue to be 4321, got %d", oldValue, newValue)
+			}
+		case <-time.NewTimer(2 * time.Second).C:
+			t.Fatalf("expected subscription to receive an event. Timedout")
 		}
 	})
+
 	t.Run("fileField trims the spaces in content", func(t *testing.T) {
 		text := `
 	test
