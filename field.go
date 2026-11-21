@@ -95,6 +95,8 @@ func (f Field) Load() (loaded bool, err error) {
 		} else {
 			f.value.Set(copyValue)
 		}
+	} else if f.config.Required && (f.value.IsZero() || !f.value.IsValid()) {
+		return loaded, RequiredFieldError{f.name}
 	}
 	return loaded, nil
 }

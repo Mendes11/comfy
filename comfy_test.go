@@ -40,6 +40,7 @@ func (m *MyStringWithParser) ComfyParse(s string, opts parsers.ParserOpts) error
 }
 
 func setupFileVariable(t *testing.T, value string) *os.File {
+	t.Helper()
 	testDir := t.TempDir()
 	f, err := os.CreateTemp(testDir, "envfile")
 	if err != nil {
@@ -48,6 +49,13 @@ func setupFileVariable(t *testing.T, value string) *os.File {
 	_, _ = f.Write([]byte(value))
 	_ = f.Close()
 	return f
+}
+
+// Setup the testing environment
+func TestMain(m *testing.M) {
+	comfy.SetAppEnvironment("testing")
+	code := m.Run()
+	os.Exit(code)
 }
 
 func TestBaseStructLoad(t *testing.T) {
@@ -343,6 +351,10 @@ func TestLoadConfig(t *testing.T) {
 		t.Setenv("VAR2", "valueInEnv")
 		comfy.SetEnvironmentDefault("development", Config{Var1: "defaultValue1"})
 		comfy.SetAppEnvironment("development")
+		t.Cleanup(func() {
+			comfy.SetAppEnvironment("testing")
+			comfy.UnsetEnvironmentDefault("development")
+		})
 		conf, err := comfy.LoadConfig[Config]()
 		if err != nil {
 			t.Fatal(err)

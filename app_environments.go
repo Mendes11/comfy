@@ -47,6 +47,11 @@ func SetEnvironmentDefault(name string, conf any) {
 	environments[name] = conf
 }
 
+// UnsetEnvironmentDefault unnasigns a default value for an app environment if it exists
+func UnsetEnvironmentDefault(name string) {
+	delete(environments, name)
+}
+
 func validateEnvironment(conf any) error {
 	for _, v := range environments {
 		if reflect.TypeOf(v).Name() != reflect.TypeOf(v).Name() {

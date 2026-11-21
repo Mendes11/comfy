@@ -15,6 +15,7 @@ var DefaultFieldConfig = FieldConfig{
 	AutoFileLookupEnabled: true,
 	NoPrefix:              false,
 	Format:                "",
+	Required:              false,
 }
 
 // FieldConfig holds how fields are going to be loaded and looked up
@@ -24,6 +25,7 @@ type FieldConfig struct {
 	NoPrefix              bool
 	Format                string
 	AutoFileLookupEnabled bool
+	Required              bool
 }
 
 func NewFieldConfig() FieldConfig {
@@ -43,18 +45,20 @@ func (f FieldConfig) AsParserOpts() parsers.ParserOpts {
 type tagConfigName string
 
 const (
-	tagConfNoPrefix   tagConfigName = "no-prefix"
-	tagConfFormat     tagConfigName = "format"
-	tagConfFileSuffix tagConfigName = "file-suffix"
+	tagConfNoPrefix       tagConfigName = "no-prefix"
+	tagConfFormat         tagConfigName = "format"
+	tagConfFileSuffix     tagConfigName = "file-suffix"
+	tagConfigFileRequired tagConfigName = "required"
 )
 
 type tagConfigApply func(*FieldConfig, string) error
 
 // tagAppliers maps every possible Comfy tag settings to a function that modifies FieldConfig
 var tagAppliers = map[tagConfigName]tagConfigApply{
-	tagConfNoPrefix:   noPrefixApply,
-	tagConfFormat:     formatApply,
-	tagConfFileSuffix: fileSuffixApply,
+	tagConfNoPrefix:       noPrefixApply,
+	tagConfFormat:         formatApply,
+	tagConfFileSuffix:     fileSuffixApply,
+	tagConfigFileRequired: requiredApply,
 }
 
 var noPrefixApply = func(c *FieldConfig, value string) error {
@@ -72,6 +76,11 @@ var fileSuffixApply = func(c *FieldConfig, value string) error {
 	return nil
 }
 
+var requiredApply = func(c *FieldConfig, value string) error {
+	c.Required = true
+	return nil
+}
+
 func fieldTagConfigs(structField reflect.StructField) (FieldConfig, error) {
 	conf := NewFieldConfig()
 	tagValuesStr, exists := structField.Tag.Lookup("comfy")
@@ -81,12 +90,12 @@ func fieldTagConfigs(structField reflect.StructField) (FieldConfig, error) {
 	tagValues := strings.Split(tagValuesStr, ",")
 
 	if len(tagValues) == 0 {
-		emptyName := ""
-		conf.CustomEnvName = &emptyName
 		return conf, nil
 	}
 
-	conf.CustomEnvName = &tagValues[0]
+	if tagValues[0] != "" {
+		conf.CustomEnvName = &tagValues[0]
+	}
 	for _, tagConf := range tagValues[1:] {
 		tagConfValues := strings.Split(tagConf, "=")
 		tagConfName := tagConfValues[0]

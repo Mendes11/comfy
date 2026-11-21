@@ -30,6 +30,14 @@ func (e MissingParserError) Error() string {
 	return fmt.Sprintf("don't know how to parse type '%s'. Missing implementing ComfyParser interface.", e.TargetType)
 }
 
+type RequiredFieldError struct {
+	FieldName string
+}
+
+func (e RequiredFieldError) Error() string {
+	return fmt.Sprintf("%s is required.", e.FieldName)
+}
+
 // Sentinel Errors
 
 var (

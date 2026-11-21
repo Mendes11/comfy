@@ -36,3 +36,60 @@ func TestComfyFieldSetup(t *testing.T) {
 		}
 	})
 }
+
+func TestFieldTags(t *testing.T) {
+	t.Run("Field.Load returns error when field is required", func(t *testing.T) {
+		type ConfigWithRequired struct {
+			Var string `comfy:",required"`
+		}
+		_, err := comfy.LoadConfig[ConfigWithRequired]()
+		if err == nil {
+			t.Fatalf("expected comfy to fail")
+		}
+		t.Setenv("VAR", "test")
+		_, err = comfy.LoadConfig[ConfigWithRequired]()
+		if err != nil {
+			t.Fatalf("expected to not fail, got: %v", err)
+		}
+	})
+	t.Run("required field for optional fields", func(t *testing.T) {
+		type Config struct {
+			Var *string `comfy:",required"`
+		}
+		_, err := comfy.LoadConfig[Config]()
+		if err == nil {
+			t.Fatal("expected comfy to fail")
+		}
+		t.Setenv("VAR", "test")
+		_, err = comfy.LoadConfig[Config]()
+		if err != nil {
+			t.Fatalf("expected to not fail, got %v", err)
+		}
+	})
+	t.Run("required field doesn't fail if default value exists", func(t *testing.T) {
+		type Config struct {
+			Var1 string  `comfy:",required"`
+			Var2 *string `comfy:",required"`
+		}
+		comfy.SetAppEnvironment("development")
+		t.Cleanup(func() {
+			comfy.UnsetEnvironmentDefault("testing")
+		})
+		comfy.SetEnvironmentDefault("development", Config{})
+		_, err := comfy.LoadConfig[Config]()
+		if err == nil {
+			t.Fatal("expected to fail")
+		}
+		comfy.SetEnvironmentDefault("development", Config{Var1: "test"})
+		_, err = comfy.LoadConfig[Config]()
+		if err == nil {
+			t.Fatal("expected to fail")
+		}
+		str := "testing"
+		comfy.SetEnvironmentDefault("development", Config{Var1: "test", Var2: &str})
+		_, err = comfy.LoadConfig[Config]()
+		if err != nil {
+			t.Fatalf("expected to not fail, got %v", err)
+		}
+	})
+}
