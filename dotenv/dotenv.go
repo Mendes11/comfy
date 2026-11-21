@@ -7,9 +7,10 @@ import (
 	"os"
 	"path"
 	"regexp"
-	"strings"
 )
 
+// AppEnvLoader returns the application environment name
+// return zero value if it doesn't have one
 type AppEnvLoader func() string
 
 var (
@@ -43,11 +44,21 @@ func GetEnvsDir() string {
 //
 // It reads files in the following order:
 // 1. .env
-// 2. .env.local
-// 3. .env.<environment> # In case the app has an environment set
+// 2. .env.<environment> # In case the app has an environment set
+// 3. .env.local
 // 4. .env.<environment>.local # In case the app has an environment set
 func LoadDotEnvs(appEnvLoader AppEnvLoader) error {
-	for _, filename := range []string{".env", ".env.local"} {
+	appEnvName := ""
+	if appEnvLoader != nil {
+		appEnvName = appEnvLoader()
+	}
+
+	orderedFiles := []string{".env.local", ".env"}
+	if appEnvName != "" {
+		appEnvFilename := fmt.Sprintf(".env.%s", appEnvName)
+		orderedFiles = []string{appEnvFilename + ".local", ".env.local", appEnvFilename, ".env"}
+	}
+	for _, filename := range orderedFiles {
 		filepath := path.Join(GetEnvsDir(), filename)
 		if !fileExists(filepath) {
 			continue
@@ -56,24 +67,11 @@ func LoadDotEnvs(appEnvLoader AppEnvLoader) error {
 			return err
 		}
 	}
-	if appEnvLoader != nil {
-		env := appEnvLoader()
-		if env != "" {
-			for _, filename := range []string{".env.{env}", ".env.{env}.local"} {
-				resolvedName := strings.Replace(filename, "{env}", env, 1)
-				filepath := path.Join(GetEnvsDir(), resolvedName)
-				if !fileExists(filepath) {
-					continue
-				}
-				if err := loadEnvFromFile(filepath); err != nil {
-					return err
-				}
-			}
-		}
-	}
 	return nil
 }
 
+// loadEnvFromFile sets missing variables into the process environment.
+// The function WILL NOT set the variable if it already exists.
 func loadEnvFromFile(path string) error {
 	f, err := os.Open(path)
 	if err != nil {
@@ -85,6 +83,9 @@ func loadEnvFromFile(path string) error {
 		line := scanner.Text()
 		match := envsMatcher.FindStringSubmatch(line)
 		if len(match) == 0 {
+			continue
+		}
+		if _, exists := os.LookupEnv(match[1]); exists {
 			continue
 		}
 		if err = os.Setenv(match[1], match[2]); err != nil {

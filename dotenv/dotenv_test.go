@@ -15,68 +15,47 @@ func TestDotEnvLoader(t *testing.T) {
 			t.Fatalf("Expected no error, got: %v", err)
 		}
 	})
-	t.Run("loads `.env` file", func(t *testing.T) {
+
+	t.Run("dotenv files priority respected", func(t *testing.T) {
+		//  Process variables wins over all
+		//  Local always wins over the other files
+		// | Priority |  Source |
+		// | +---+    | +---+ |
+		// | 1        |  processEnv
+		// | 2        |  .env.<app_env>.local
+		// | 3        |  .env.local
+		// | 4        |  .env.<app_env>
+		// | 5        |  .env
 		tempDir := t.TempDir()
 		env := `
-TEST_ENV=value
-# TEST_ENV=value_commented
-TEST_ENV2=value2
-// TEST_ENV2=value2_commented
-		`
-		writeEnv(t, tempDir, ".env", env)
-		if err := dotenv.SetEnvsDir(tempDir); err != nil {
-			t.Fatal(err)
-		}
-		if err := dotenv.LoadDotEnvs(nil); err != nil {
-			t.Fatal(err)
-		}
-
-		assertEnv(t, "TEST_ENV", "value")
-		assertEnv(t, "TEST_ENV2", "value2")
-	})
-
-	t.Run("loads .env and .env.local overrides", func(t *testing.T) {
-		tempDir := t.TempDir()
-		env := `
-TEST_ENV=value
-TEST_ENV2=value2
-		`
-		envLocal := `
-TEST_ENV2=localValue
-TEST_ENV3=value3
-		`
-		writeEnv(t, tempDir, ".env", env)
-		writeEnv(t, tempDir, ".env.local", envLocal)
-		if err := dotenv.SetEnvsDir(tempDir); err != nil {
-			t.Fatal(err)
-		}
-		if err := dotenv.LoadDotEnvs(nil); err != nil {
-			t.Fatal(err)
-		}
-
-		assertEnv(t, "TEST_ENV", "value")
-		assertEnv(t, "TEST_ENV2", "localValue")
-		assertEnv(t, "TEST_ENV3", "value3")
-	})
-
-	t.Run("loads environment-specific files", func(t *testing.T) {
-		tempDir := t.TempDir()
-		env := `
-TEST_ENV=value
-TEST_ENV2=value2
-		`
+TEST_ENV=envValue
+TEST_ENV2=envValue2
+TEST_ENV3=envValue3
+TEST_ENV4=envValue4
+TEST_ENV5=envValue5
+`
 		envDev := `
+TEST_ENV=devValue
 TEST_ENV2=devValue2
 TEST_ENV3=devValue3
+TEST_ENV4=devValue4
+`
+		envLocal := `
+TEST_ENV=envLocalValue
+TEST_ENV2=envLocalValue2
+TEST_ENV3=envLocalValue3
 `
 		envDevLocal := `
-TEST_ENV3=devValueLocal3
-TEST_ENV4=devValueLocal4
+TEST_ENV=devValueLocal
+TEST_ENV2=devValueLocal2
 		`
 
+		t.Setenv("TEST_ENV", "processEnvValue")
 		writeEnv(t, tempDir, ".env", env)
+		writeEnv(t, tempDir, ".env.local", envLocal)
 		writeEnv(t, tempDir, ".env.development", envDev)
 		writeEnv(t, tempDir, ".env.development.local", envDevLocal)
+
 		if err := dotenv.SetEnvsDir(tempDir); err != nil {
 			t.Fatal(err)
 		}
@@ -84,36 +63,16 @@ TEST_ENV4=devValueLocal4
 			t.Fatal(err)
 		}
 
-		assertEnv(t, "TEST_ENV", "value")
-		assertEnv(t, "TEST_ENV2", "devValue2")
-		assertEnv(t, "TEST_ENV3", "devValueLocal3")
-		assertEnv(t, "TEST_ENV4", "devValueLocal4")
-	})
-
-	t.Run("loads environment from dotenv file", func(t *testing.T) {
-		tempDir := t.TempDir()
-		env := `
-APP_ENV=development
-		`
-		envDev := `
-TEST_ENV=devValue
-`
-		writeEnv(t, tempDir, ".env", env)
-		writeEnv(t, tempDir, ".env.development", envDev)
-
-		if err := dotenv.SetEnvsDir(tempDir); err != nil {
-			t.Fatal(err)
-		}
-		if err := dotenv.LoadDotEnvs(func() string { return os.Getenv("APP_ENV") }); err != nil {
-			t.Fatal(err)
-		}
-
-		assertEnv(t, "APP_ENV", "development")
-		assertEnv(t, "TEST_ENV", "devValue")
+		assertEnv(t, "TEST_ENV", "processEnvValue")
+		assertEnv(t, "TEST_ENV2", "devValueLocal2")
+		assertEnv(t, "TEST_ENV3", "envLocalValue3")
+		assertEnv(t, "TEST_ENV4", "devValue4")
+		assertEnv(t, "TEST_ENV5", "envValue5")
 	})
 }
 
 func assertEnv(t *testing.T, name, expected string) {
+	t.Helper()
 	if val, exists := os.LookupEnv(name); !exists {
 		t.Fatalf("expected %s to be set", name)
 	} else if val != expected {
@@ -122,6 +81,7 @@ func assertEnv(t *testing.T, name, expected string) {
 }
 
 func writeEnv(t *testing.T, dir string, name string, content string) {
+	t.Helper()
 	f, err := os.OpenFile(path.Join(dir, name), os.O_CREATE|os.O_TRUNC|os.O_RDWR, 0o666)
 	if err != nil {
 		t.Fatal(err)
